@@ -27,7 +27,7 @@ st.markdown("""
 
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
-    col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
+    col_l1, col_l2, col_l3 = st.columns(3)
     with col_l2:
         st.image(Image.open(ruta_logo), width=180)
 
@@ -82,22 +82,27 @@ def cargar_bd():
     try:
         res = requests.get(URL_API).json()
         
+        # 👥 Procesar Usuarios
         usuarios_raw = res.get("usuarios", [])
         if len(usuarios_raw) > 1:
-            df_u = pd.DataFrame(usuarios_raw[1:], columns=usuarios_raw[0])
+            columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
+            df_u = pd.DataFrame(usuarios_raw[1:], columns=columnas_u)
         else:
             df_u = pd.DataFrame(columns=["cedula", "nombre_completo", "whatsapp", "eps", "condiciones_medicas", "rol", "password", "fecha_registro"])
 
+        # 📈 Procesar Historial
         historial_raw = res.get("historial", [])
         if len(historial_raw) > 1:
-            df_m = pd.DataFrame(historial_raw[1:], columns=historial_raw[0])
+            columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
+            df_m = pd.DataFrame(historial_raw[1:], columns=columnas_h)
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Limpieza estricta y segura para emparejar formatos numéricos y de texto
-        df_u["cedula"] = df_u["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
-        if not df_m.empty:
-            df_m["cedula"] = df_m["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
+        # Conversión de seguridad para remover decimales (.0) y normalizar como texto limpio
+        if "cedula" in df_u.columns:
+            df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        if not df_m.empty and "cedula" in df_m.columns:
+            df_m["cedula"] = df_m["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
         return df_u, df_m
     except Exception as e:
@@ -173,14 +178,13 @@ if not st.session_state["autenticado"]:
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
     st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
-    
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
         st.session_state["rol"] = None
         st.session_state["cedula"] = None
         st.session_state["nombre"] = None
         st.rerun()
-    
+
     df_usuarios, df_historial = cargar_bd()
 
     # --- 👤 MÓDULO CLIENTE ---
@@ -265,7 +269,7 @@ else:
     elif st.session_state["rol"] == "Admin":
         st.subheader("👑 Panel de Control General")
         if not df_usuarios.empty:
-            clientes = df_usuarios[df_usuarios["rol"] == "Cliente"]
+            clientes = df_usuarios[df_usuarios["rol"].str.lower() == "cliente"]
             st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
             
