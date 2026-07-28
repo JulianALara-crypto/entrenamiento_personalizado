@@ -13,7 +13,7 @@ URL_API = "https://script.google.com/macros/s/AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHe
 ruta_logo = "logo.png"
 icono_pestana = Image.open(ruta_logo) if os.path.exists(ruta_logo) else ""
 
-st.set_page_config(page_title="Power Training - Personalizado", page_icon=icono_pestana, layout="wide")
+st.set_page_config(page_title="Personal Training y Evolution Tracker Julian Avila", page_icon=icono_pestana, layout="wide")
 
 # Estilos visuales en modo oscuro
 st.markdown("""
