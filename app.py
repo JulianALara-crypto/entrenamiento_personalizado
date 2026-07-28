@@ -27,7 +27,7 @@ st.markdown("""
 
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
-    col_l1, col_l2, col_l3 = st.columns()
+    col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
     with col_l2:
         st.image(Image.open(ruta_logo), width=180)
 
@@ -74,7 +74,7 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
     if not mensaje:
         mensaje = f"💪 ¡Hola {nombre_cliente}! Te saludamos de tu plan de Entrenamiento Personalizado. ¡Queremos revisar cómo van tus avances!"
         
-    return f"https://wa.me{num_limpio}?text={urllib.parse.quote(mensaje)}"
+    return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
 # --- CARGAR DATOS DESDE GOOGLE SHEETS ---
 @st.cache_data(ttl=2)
@@ -96,6 +96,7 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
+        # Conversión de seguridad para remover decimales (.0) y normalizar como texto limpio
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -103,6 +104,7 @@ def cargar_bd():
 
         return df_u, df_m
     except Exception as e:
+        st.error(f"Error conectando con la base de datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # --- AUTENTICACIÓN / SESIÓN ---
@@ -113,6 +115,7 @@ if "autenticado" not in st.session_state:
     st.session_state["nombre"] = None
 
 st.title("🏋️‍♂️ PERSONAL TRAINING & EVOLUTION TRACKER")
+
 # --- LOGIN / REGISTRO ---
 if not st.session_state["autenticado"]:
     col1, col2 = st.columns(2)
@@ -172,7 +175,7 @@ if not st.session_state["autenticado"]:
 # --- PANELES UNA VEZ AUTENTICADO ---
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
-    st.sidebar.markdown(f"**Rol:** {st.session_state['rol']}")
+    st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
         st.session_state["rol"] = None
@@ -182,6 +185,7 @@ else:
 
     df_usuarios, df_historial = cargar_bd()
 
+    # --- 👤 MÓDULO CLIENTE ---
     if st.session_state["rol"] == "Cliente":
         opcion = st.sidebar.radio("MENÚ", ["📏 Registrar Medidas Hoy", "📊 Ver Mi Progreso"])
         
@@ -196,7 +200,7 @@ else:
                 meta = c2.selectbox("Objetivo Principal:", ["Perder Grasa", "Ganar Músculo", "Mantenimiento"])
                 
                 st.markdown("---")
-                st.write("**Medidas Corporales (cm)**")
+                st.write("*Medidas Corporales (cm)*")
                 m1, m2, m3, m4 = st.columns(4)
                 cuello = m1.number_input("Cuello:", 20.0, 60.0, 38.0)
                 hombros = m2.number_input("Hombros:", 50.0, 180.0, 110.0)
@@ -243,22 +247,24 @@ else:
                 def get_val(row, keys_posibles, default=0.0):
                     for k in keys_posibles:
                         if k in row.index:
-                            try: return float(row[k])
-                            except: pass
+                            try:
+                                return float(row[k])
+                            except:
+                                pass
                     return default
-                
+
                 peso_i = get_val(inicial, ["peso_kg", "peso", "peso(kg)"], 70.0)
                 peso_a = get_val(actual, ["peso_kg", "peso", "peso(kg)"], 70.0)
                 cint_i = get_val(inicial, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
                 cint_a = get_val(actual, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
                 gras_i = get_val(inicial, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
                 gras_a = get_val(actual, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
-                
+
                 diff_peso = peso_a - peso_i
                 diff_cintura = cint_a - cint_i
                 diff_grasa = gras_a - gras_i
-                
-                st.info(f"📊 **Resumen desde tu primer registro ({inicial.get('fecha_evaluacion', 'Inicial')}) hasta hoy ({actual.get('fecha_evaluacion', 'Actual')}):**")
+
+                st.info("📊 Resumen desde tu primer registro hasta hoy:")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Variación de Peso", f"{peso_a} kg", f"{diff_peso:.1f} kg")
                 c2.metric("Variación de Cintura", f"{cint_a} cm", f"{diff_cintura:.1f} cm")
@@ -271,34 +277,26 @@ else:
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
+    # --- 👑 MÓDULO ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
         st.subheader("👑 Panel de Control General")
         if not df_usuarios.empty:
             clientes = df_usuarios[df_usuarios["rol"].str.lower() == "cliente"]
-            st.markdown(f"**Total de Clientes Registrados:** {len(clientes)}")
+            st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
             
             if cedula_sel:
-                id_cliente = cedula_sel.split(" - ")[0].strip()
-                u_info = clientes[clientes["cedula"] == id_cliente].iloc[0]
-                
-                st.markdown("---")
-                col_u1, col_u2 = st.columns(2)
-                with col_u1:
-                    st.markdown(f"""
-                    * **Nombre:** {u_info['nombre_completo']}
                 id_cliente = str(cedula_sel.split(" - ")[0]).strip()
                 u_info = clientes[clientes["cedula"] == id_cliente].iloc[0]
-                
                 st.markdown("---")
                 col_u1, col_u2 = st.columns(2)
                 with col_u1:
                     st.markdown(f"""
-                    * **Nombre:** {u_info['nombre_completo']}
-                    * **Cédula:** {u_info['cedula']}
-                    * **EPS:** {u_info['eps']}
-                    * **Condiciones Físicas:** {u_info['condiciones_medicas']}
-                    """)
+* *Nombre:* {u_info['nombre_completo']}
+* *Cédula:* {u_info['cedula']}
+* *EPS:* {u_info['eps']}
+* *Condiciones Físicas:* {u_info['condiciones_medicas']}
+""")
                 with col_u2:
                     ws_url = link_whatsapp(u_info['whatsapp'], u_info['nombre_completo'])
                     st.link_button("💬 Enviar WhatsApp", ws_url, use_container_width=True)
