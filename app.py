@@ -76,12 +76,13 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS ---
+# --- CARGAR DATOS DESDE GOOGLE SHEETS (CORREGIDO ERROR DE DUPLICADOS) ---
 @st.cache_data(ttl=2)
 def cargar_bd():
     try:
         res = requests.get(URL_API).json()
         
+        # 👥 Procesar pestaña Usuarios
         usuarios_raw = res.get("usuarios", [])
         if len(usuarios_raw) > 1:
             columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
@@ -89,6 +90,7 @@ def cargar_bd():
         else:
             df_u = pd.DataFrame(columns=["cedula", "nombre_completo", "whatsapp", "eps", "condiciones_medicas", "rol", "password", "fecha_registro"])
 
+        # 📈 Procesar pestaña Historial
         historial_raw = res.get("historial", [])
         if len(historial_raw) > 1:
             columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
@@ -96,7 +98,7 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Conversión de seguridad para remover decimales (.0) y normalizar como texto limpio
+        # Normalización estricta de las columnas de cédula eliminando decimales (.0) flotantes
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -104,7 +106,7 @@ def cargar_bd():
 
         return df_u, df_m
     except Exception as e:
-        st.error(f"Error conectando con la base de datos: {e}")
+        st.error(f"Error procesando base de datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # --- AUTENTICACIÓN / SESIÓN ---
@@ -215,7 +217,7 @@ else:
                 pierna_izq = m1.number_input("Pierna Izq:", 20.0, 90.0, 55.0)
                 gemelo_der = m2.number_input("Gemelo Der:", 15.0, 60.0, 35.0)
                 gemelo_izq = m3.number_input("Gemelo Izq:", 15.0, 60.0, 35.0)
-                
+
                 if st.form_submit_button("Guardar Evaluación"):
                     imc, grasa, cals, edad_bio = calcular_metricas(peso, estatura, edad, sexo, cuello, cintura, cadera, meta)
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
@@ -243,7 +245,7 @@ else:
                 mis_registros = mis_registros.sort_values(by="fecha_evaluacion")
                 inicial = mis_registros.iloc[0]
                 actual = mis_registros.iloc[-1]
-                
+
                 def get_val(row, keys_posibles, default=0.0):
                     for k in keys_posibles:
                         if k in row.index:
@@ -270,10 +272,10 @@ else:
                 c2.metric("Variación de Cintura", f"{cint_a} cm", f"{diff_cintura:.1f} cm")
                 c3.metric("Variación % Grasa", f"{gras_a}%", f"{diff_grasa:.1f}%")
                 
-                st.table(mis_registros.astype(str))
+                st.dataframe(mis_registros.astype(str), use_container_width=True)
             elif len(mis_registros) == 1:
                 st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa.")
-                st.table(mis_registros.astype(str))
+                st.dataframe(mis_registros.astype(str), use_container_width=True)
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
@@ -305,6 +307,6 @@ else:
                 st.subheader("📈 Historial de Avances del Cliente")
                 h_cliente = df_historial[df_historial["cedula"] == id_cliente] if not df_historial.empty else pd.DataFrame()
                 if not h_cliente.empty:
-                    st.table(h_cliente.astype(str))
+                    st.dataframe(h_cliente.astype(str), use_container_width=True)
                 else:
                     st.warning("Este cliente aún no ha ingresado registros de medidas.")
