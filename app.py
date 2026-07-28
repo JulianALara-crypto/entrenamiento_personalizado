@@ -287,7 +287,7 @@ else:
 
     # --- ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
-        st.subheader("👑 Panel de Control General")
+        st.subheader("Panel de Control General")
         if not df_usuarios.empty:
             clientes = df_usuarios[df_usuarios["rol"].str.lower() == "cliente"]
             st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
