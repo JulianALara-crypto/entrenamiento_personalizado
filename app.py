@@ -65,7 +65,7 @@ def calcular_metricas(peso, estatura_cm, edad, sexo, cuello, cintura, cadera, me
 
     return round(imc, 1), round(pct_grasa, 1), int(calorias), edad_metabolica
 
-# --- FUNCIÓN PARA LIMPIAR Y GENERAR WHATSAPP (COLOMBIA) ---
+# --- FUNCIÓN PARA LIMPIAR Y GENERAR WHATSAPP ---
 def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
     num_limpio = str(num_celular).strip().replace(" ", "").replace("-", "").replace(".", "")
     if not num_limpio.startswith("57"):
@@ -76,29 +76,31 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS (CORRECCIÓN DEFINITIVA DE DUPLICADOS) ---
+# --- CARGAR DATOS DESDE GOOGLE SHEETS ---
 @st.cache_data(ttl=2)
 def cargar_bd():
     try:
         res = requests.get(URL_API).json()
         
-        # 👥 Procesar pestaña Usuarios
+        # Usuarios
         usuarios_raw = res.get("usuarios", [])
         if len(usuarios_raw) > 1:
             columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
             df_u = pd.DataFrame(usuarios_raw[1:], columns=columnas_u)
+            df_u = df_u.loc[:, ~df_u.columns.duplicated()] # Elimina columnas duplicadas
         else:
             df_u = pd.DataFrame(columns=["cedula", "nombre_completo", "whatsapp", "eps", "condiciones_medicas", "rol", "password", "fecha_registro"])
 
-        # 📈 Procesar pestaña Historial
+        # Historial
         historial_raw = res.get("historial", [])
         if len(historial_raw) > 1:
             columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
             df_m = pd.DataFrame(historial_raw[1:], columns=columnas_h)
+            df_m = df_m.loc[:, ~df_m.columns.duplicated()] # Elimina columnas duplicadas
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Unificar formatos de cédula eliminando float (.0)
+        # Limpiar formatos de cédula
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -109,7 +111,7 @@ def cargar_bd():
         st.error(f"Error procesando base de datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
-# --- AUTENTICACIÓN / SESIÓN ---
+# --- AUTENTICACIÓN ---
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["rol"] = None
@@ -118,7 +120,6 @@ if "autenticado" not in st.session_state:
 
 st.title("🏋️‍♂️ PERSONAL TRAINING & EVOLUTION TRACKER")
 
-# --- LOGIN / REGISTRO ---
 if not st.session_state["autenticado"]:
     col1, col2 = st.columns(2)
     
@@ -174,7 +175,6 @@ if not st.session_state["autenticado"]:
                     except Exception as e:
                         st.error(f"Error al guardar usuario: {e}")
 
-# --- PANELES UNA VEZ AUTENTICADO ---
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
     st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
@@ -187,7 +187,7 @@ else:
 
     df_usuarios, df_historial = cargar_bd()
 
-    # --- 👤 MÓDULO CLIENTE ---
+    # --- CLIENTE ---
     if st.session_state["rol"] == "Cliente":
         opcion = st.sidebar.radio("MENÚ", ["📏 Registrar Medidas Hoy", "📊 Ver Mi Progreso"])
         
@@ -261,12 +261,12 @@ else:
                                 pass
                     return default
 
-                peso_i = get_val(inicial, ["peso_kg", "peso", "peso(kg)"], 70.0)
-                peso_a = get_val(actual, ["peso_kg", "peso", "peso(kg)"], 70.0)
-                cint_i = get_val(inicial, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
-                cint_a = get_val(actual, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
-                gras_i = get_val(inicial, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
-                gras_a = get_val(actual, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
+                peso_i = get_val(inicial, ["peso_kg", "peso"], 70.0)
+                peso_a = get_val(actual, ["peso_kg", "peso"], 70.0)
+                cint_i = get_val(inicial, ["cintura_cm", "cintura"], 80.0)
+                cint_a = get_val(actual, ["cintura_cm", "cintura"], 80.0)
+                gras_i = get_val(inicial, ["porcentaje_grasa", "grasa"], 20.0)
+                gras_a = get_val(actual, ["porcentaje_grasa", "grasa"], 20.0)
 
                 diff_peso = peso_a - peso_i
                 diff_cintura = cint_a - cint_i
@@ -285,7 +285,7 @@ else:
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
-    # --- 👑 MÓDULO ADMINISTRADOR ---
+    # --- ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
         st.subheader("👑 Panel de Control General")
         if not df_usuarios.empty:
