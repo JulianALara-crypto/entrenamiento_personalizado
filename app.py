@@ -76,7 +76,7 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS (CONVERSION TEXTO ESTRICTA) ---
+# --- CARGAR DATOS DESDE GOOGLE SHEETS ---
 @st.cache_data(ttl=2)
 def cargar_bd():
     try:
@@ -94,10 +94,10 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # SOLUCIÓN CRÍTICA: Eliminar cualquier ".0" decimal de las cédulas y pasarlas a Texto Puro
-        df_u["cedula"] = df_u["cedula"].astype(str).str.split('.').str[0].str.strip()
+        # Conversión segura y estricta de cédulas a string limpio sin decimales (.0)
+        df_u["cedula"] = df_u["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
         if not df_m.empty:
-            df_m["cedula"] = df_m["cedula"].astype(str).str.split('.').str[0].str.strip()
+            df_m["cedula"] = df_m["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
 
         return df_u, df_m
     except Exception as e:
@@ -254,7 +254,7 @@ else:
                 c3.metric("Variación % Grasa", f"{actual['porcentaje_grasa']}%", f"{diff_grasa:.1f}%")
                 st.dataframe(mis_registros, use_container_width=True)
             elif len(mis_registros) == 1:
-                st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa y gráficos de tu evolución.")
+                st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa.")
                 st.dataframe(mis_registros, use_container_width=True)
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
