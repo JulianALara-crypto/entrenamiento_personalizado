@@ -94,13 +94,14 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Conversión segura y estricta de cédulas a string limpio sin decimales (.0)
+        # Limpieza estricta y segura para emparejar formatos numéricos y de texto
         df_u["cedula"] = df_u["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
         if not df_m.empty:
             df_m["cedula"] = df_m["cedula"].astype(str).apply(lambda x: x.split('.')[0].strip())
 
         return df_u, df_m
     except Exception as e:
+        st.error(f"Error procesando base de datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # --- AUTENTICACIÓN / SESIÓN ---
@@ -172,13 +173,14 @@ if not st.session_state["autenticado"]:
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
     st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
+    
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
         st.session_state["rol"] = None
         st.session_state["cedula"] = None
         st.session_state["nombre"] = None
         st.rerun()
-
+    
     df_usuarios, df_historial = cargar_bd()
 
     # --- 👤 MÓDULO CLIENTE ---
@@ -212,7 +214,7 @@ else:
                 pierna_izq = m1.number_input("Pierna Izq:", 20.0, 90.0, 55.0)
                 gemelo_der = m2.number_input("Gemelo Der:", 15.0, 60.0, 35.0)
                 gemelo_izq = m3.number_input("Gemelo Izq:", 15.0, 60.0, 35.0)
-
+                
                 if st.form_submit_button("Guardar Evaluación"):
                     imc, grasa, cals, edad_bio = calcular_metricas(peso, estatura, edad, sexo, cuello, cintura, cadera, meta)
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
@@ -273,7 +275,7 @@ else:
                 st.markdown("---")
                 col_u1, col_u2 = st.columns([3, 1])
                 with col_u1:
-                    st.markdown(f"""* Nombre: {u_info['nombre_completo']}* Cédula: {u_info['cedula']}* EPS: {u_info['eps']}* Condiciones Físicas: {u_info['condiciones_medicas']}""")
+                    st.markdown(f"""* *Nombre:* {u_info['nombre_completo']}\n* *Cédula:* {u_info['cedula']}\n* *EPS:* {u_info['eps']}\n* *Condiciones Físicas:* {u_info['condiciones_medicas']}""")
                 with col_u2:
                     ws_url = link_whatsapp(u_info['whatsapp'], u_info['nombre_completo'])
                     st.link_button("💬 Enviar WhatsApp", ws_url, use_container_width=True)
