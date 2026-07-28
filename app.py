@@ -69,7 +69,7 @@ def calcular_metricas(peso, estatura_cm, edad, sexo, cuello, cintura, cadera, me
 
 # --- FUNCIÓN PARA LIMPIAR Y GENERAR WHATSAPP (COLOMBIA) ---
 def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
-    num_limpio = str(num_celular).strip().split('.')[0].replace(" ", "").replace("-", "")
+    num_limpio = str(num_celular).strip().replace(" ", "").replace("-", "").replace(".", "")
     if not num_limpio.startswith("57"):
         num_limpio = "57" + num_limpio
         
@@ -79,7 +79,7 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
 # --- CARGAR DATOS DESDE GOOGLE SHEETS ---
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=5)
 def cargar_bd():
     try:
         res = requests.get(URL_API).json()
@@ -170,7 +170,7 @@ if not st.session_state["autenticado"]:
 # --- PANELES UNA VEZ AUTENTICADO ---
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
-    st.sidebar.markdown(f"**Rol:** {st.session_state['rol']}")
+    st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
         st.rerun()
@@ -191,7 +191,7 @@ else:
                 meta = c2.selectbox("Objetivo Principal:", ["Perder Grasa", "Ganar Músculo", "Mantenimiento"])
                 
                 st.markdown("---")
-                st.write("**Medidas Corporales (cm)**")
+                st.write("*Medidas Corporales (cm)*")
                 m1, m2, m3, m4 = st.columns(4)
                 cuello = m1.number_input("Cuello:", 20.0, 60.0, 38.0)
                 hombros = m2.number_input("Hombros:", 50.0, 180.0, 110.0)
@@ -213,7 +213,12 @@ else:
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
                     fecha_hoy = datetime.today().strftime('%Y-%m-%d')
                     
-                    fila_medidas = [id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, cals, edad_bio]
+                    fila_medidas = [
+                        id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, 
+                        estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, 
+                        cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, 
+                        cals, edad_bio
+                    ]
                     
                     try:
                         requests.post(URL_API, json={"action": "guardar_medidas", "row": fila_medidas})
@@ -241,8 +246,7 @@ else:
                 diff_cintura = float(actual["cintura_cm"]) - float(inicial["cintura_cm"])
                 diff_grasa = float(actual["porcentaje_grasa"]) - float(inicial["porcentaje_grasa"])
                 
-                st.info(f"📊 **Resumen desde tu primer registro ({inicial['fecha_evaluacion']}) hasta hoy ({actual['fecha_evaluacion']}):**")
-                
+                st.info(f"📊 Resumen desde tu primer registro ({inicial['fecha_evaluacion']}) hasta hoy ({actual['fecha_evaluacion']}):")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Variación de Peso", f"{actual['peso_kg']} kg", f"{diff_peso:.1f} kg")
                 c2.metric("Variación de Cintura", f"{actual['cintura_cm']} cm", f"{diff_cintura:.1f} cm")
@@ -258,11 +262,9 @@ else:
     # --- 👑 MÓDULO ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
         st.subheader("👑 Panel de Control General")
-        
         if not df_usuarios.empty:
             clientes = df_usuarios[df_usuarios["rol"] == "Cliente"]
-            
-            st.markdown(f"**Total de Clientes Registrados:** {len(clientes)}")
+            st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
             
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
             
@@ -274,15 +276,15 @@ else:
                 col_u1, col_u2 = st.columns([3, 1])
                 with col_u1:
                     st.markdown(f"""
-                    * **Nombre:** {u_info['nombre_completo']}
-                    * **Cédula:** {u_info['cedula']}
-                    * **EPS:** {u_info['eps']}
-                    * **Condiciones Físicas:** {u_info['condiciones_medicas']}
+                    * *Nombre:* {u_info['nombre_completo']}
+                    * *Cédula:* {u_info['cedula']}
+                    * *EPS:* {u_info['eps']}
+                    * *Condiciones Físicas:* {u_info['condiciones_medicas']}
                     """)
                 with col_u2:
                     ws_url = link_whatsapp(u_info['whatsapp'], u_info['nombre_completo'])
                     st.link_button("💬 Enviar WhatsApp", ws_url, use_container_width=True)
-                    
+                
                 st.markdown("---")
                 st.subheader("📈 Historial de Avances del Cliente")
                 h_cliente = df_historial[df_historial["cedula"].astype(str) == id_cliente] if not df_historial.empty else pd.DataFrame()
