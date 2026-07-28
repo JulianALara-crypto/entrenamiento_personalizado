@@ -129,11 +129,11 @@ if not st.session_state["autenticado"]:
         pass_ingreso = st.text_input("Contraseña:", type="password").strip()
         
         if st.button("Ingresar", use_container_width=True):
-            if cedula_ingreso == "admin" and pass_ingreso == "admin123":
+            if cedula_ingreso == "admin" and pass_ingreso == "admin123456":
                 st.session_state["autenticado"] = True
                 st.session_state["rol"] = "Admin"
                 st.session_state["cedula"] = "ADMIN"
-                st.session_state["nombre"] = "Administrador"
+                st.session_state["nombre"] = "JULIAN AVILA"
                 st.rerun()
             else:
                 df_usuarios, _ = cargar_bd()
