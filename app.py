@@ -76,7 +76,7 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS (CORREGIDO ERROR DE DUPLICADOS) ---
+# --- CARGAR DATOS DESDE GOOGLE SHEETS (CORRECCIÓN DEFINITIVA DE DUPLICADOS) ---
 @st.cache_data(ttl=2)
 def cargar_bd():
     try:
@@ -98,7 +98,7 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Normalización estricta de las columnas de cédula eliminando decimales (.0) flotantes
+        # Unificar formatos de cédula eliminando float (.0)
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -222,12 +222,18 @@ else:
                     imc, grasa, cals, edad_bio = calcular_metricas(peso, estatura, edad, sexo, cuello, cintura, cadera, meta)
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
                     fecha_hoy = datetime.today().strftime('%Y-%m-%d')
-                    fila_medidas = [id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, cals, edad_bio]
+                    fila_medidas = [
+                        id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta,
+                        peso, estatura, cuello, hombros, bicep_der, bicep_izq, pecho,
+                        cintura, cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq,
+                        imc, grasa, cals, edad_bio
+                    ]
                     
                     try:
                         requests.post(URL_API, json={"action": "guardar_medidas", "row": fila_medidas})
                         st.cache_data.clear()
                         st.success("🎉 ¡Medidas guardadas con éxito!")
+                        
                         r1, r2, r3, r4 = st.columns(4)
                         r1.metric("IMC", f"{imc}")
                         r2.metric("% Grasa Estimada", f"{grasa}%")
