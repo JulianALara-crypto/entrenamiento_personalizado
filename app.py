@@ -36,7 +36,6 @@ def calcular_metricas(peso, estatura_cm, edad, sexo, cuello, cintura, cadera, me
     estatura_m = estatura_cm / 100.0
     imc = peso / (estatura_m ** 2)
     
-    # % Grasa Corporal (US Navy Method)
     try:
         if sexo == "Masculino":
             pct_grasa = 86.010 * math.log10(cintura - cuello) - 70.041 * math.log10(estatura_cm) + 36.76
@@ -46,7 +45,6 @@ def calcular_metricas(peso, estatura_cm, edad, sexo, cuello, cintura, cadera, me
     except:
         pct_grasa = 20.0
 
-    # Tasa Metabólica Basal (Mifflin-St Jeor)
     if sexo == "Masculino":
         tmb = (10 * peso) + (6.25 * estatura_cm) - (5 * edad) + 5
     else:
@@ -78,32 +76,27 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS ---
-@st.cache_data(ttl=5)
+# --- CARGAR DATOS DESDE GOOGLE SHEETS (OPTIMIZADO TTL A 60 SEGUNDOS) ---
+@st.cache_data(ttl=60)
 def cargar_bd():
     try:
         res = requests.get(URL_API).json()
         
-        df_u = pd.DataFrame(res.get("usuarios", []))
-        if not df_u.empty and len(df_u) > 1:
-            df_u.columns = df_u.iloc[0]
-            df_u = df_u[1:]
+        usuarios_raw = res.get("usuarios", [])
+        if len(usuarios_raw) > 1:
+            df_u = pd.DataFrame(usuarios_raw[1:], columns=usuarios_raw[0])
         else:
             df_u = pd.DataFrame(columns=["cedula", "nombre_completo", "whatsapp", "eps", "condiciones_medicas", "rol", "password", "fecha_registro"])
 
-        df_m = pd.DataFrame(res.get("historial", []))
-        if not df_m.empty and len(df_m) > 1:
-            df_m.columns = df_m.iloc[0]
-            df_m = df_m[1:]
+        historial_raw = res.get("historial", [])
+        if len(historial_raw) > 1:
+            df_m = pd.DataFrame(historial_raw[1:], columns=historial_raw[0])
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
         return df_u, df_m
     except Exception as e:
-        st.error(f"Error al conectar con Google Sheets: {e}")
         return pd.DataFrame(), pd.DataFrame()
-
-df_usuarios, df_historial = cargar_bd()
 
 # --- AUTENTICACIÓN / SESIÓN ---
 if "autenticado" not in st.session_state:
@@ -130,18 +123,21 @@ if not st.session_state["autenticado"]:
                 st.session_state["cedula"] = "ADMIN"
                 st.session_state["nombre"] = "Administrador"
                 st.rerun()
-            elif not df_usuarios.empty and cedula_ingreso in df_usuarios["cedula"].astype(str).values:
-                u = df_usuarios[df_usuarios["cedula"].astype(str) == cedula_ingreso].iloc[0]
-                if str(u["password"]).strip() == pass_ingreso:
-                    st.session_state["autenticado"] = True
-                    st.session_state["rol"] = u.get("rol", "Cliente")
-                    st.session_state["cedula"] = str(u["cedula"])
-                    st.session_state["nombre"] = u["nombre_completo"]
-                    st.rerun()
-                else:
-                    st.error("❌ Contraseña incorrecta.")
             else:
-                st.error("❌ Cédula no registrada.")
+                # SOLO cargamos la base de datos si el usuario intenta loguearse de verdad
+                df_usuarios, _ = cargar_bd()
+                if not df_usuarios.empty and cedula_ingreso in df_usuarios["cedula"].astype(str).values:
+                    u = df_usuarios[df_usuarios["cedula"].astype(str) == cedula_ingreso].iloc[0]
+                    if str(u["password"]).strip() == pass_ingreso:
+                        st.session_state["autenticado"] = True
+                        st.session_state["rol"] = u.get("rol", "Cliente")
+                        st.session_state["cedula"] = str(u["cedula"])
+                        st.session_state["nombre"] = u["nombre_completo"]
+                        st.rerun()
+                    else:
+                        st.error("❌ Contraseña incorrecta.")
+                else:
+                    st.error("❌ Cédula no registrada.")
 
     with col2:
         st.subheader("📝 Crear Cuenta Nueva")
@@ -154,6 +150,7 @@ if not st.session_state["autenticado"]:
             reg_pass = st.text_input("Crea tu Contraseña:", type="password").strip()
             
             if st.form_submit_button("Crear Perfil"):
+                df_usuarios, _ = cargar_bd()
                 if not reg_cedula or not reg_nombre or not reg_pass:
                     st.error("⚠️ Cédula, Nombre y Contraseña son obligatorios.")
                 elif not df_usuarios.empty and reg_cedula in df_usuarios["cedula"].astype(str).values:
@@ -173,7 +170,13 @@ else:
     st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
+        st.session_state["rol"] = None
+        st.session_state["cedula"] = None
+        st.session_state["nombre"] = None
         st.rerun()
+
+    # Descarga asíncrona una vez que ya estás dentro de la app
+    df_usuarios, df_historial = cargar_bd()
 
     # --- 👤 MÓDULO CLIENTE ---
     if st.session_state["rol"] == "Cliente":
@@ -209,22 +212,13 @@ else:
                 
                 if st.form_submit_button("Guardar Evaluación"):
                     imc, grasa, cals, edad_bio = calcular_metricas(peso, estatura, edad, sexo, cuello, cintura, cadera, meta)
-                    
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
                     fecha_hoy = datetime.today().strftime('%Y-%m-%d')
-                    
-                    fila_medidas = [
-                        id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, 
-                        estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, 
-                        cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, 
-                        cals, edad_bio
-                    ]
-                    
+                    fila_medidas = [id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, cals, edad_bio]
                     try:
                         requests.post(URL_API, json={"action": "guardar_medidas", "row": fila_medidas})
                         st.cache_data.clear()
                         st.success("🎉 ¡Medidas guardadas con éxito!")
-                        
                         r1, r2, r3, r4 = st.columns(4)
                         r1.metric("IMC", f"{imc}")
                         r2.metric("% Grasa Estimada", f"{grasa}%")
@@ -236,22 +230,18 @@ else:
         elif opcion == "📊 Ver Mi Progreso":
             st.subheader("📉 Comparativa de Evolución")
             mis_registros = df_historial[df_historial["cedula"].astype(str) == st.session_state['cedula']] if not df_historial.empty else pd.DataFrame()
-            
             if len(mis_registros) >= 2:
                 mis_registros = mis_registros.sort_values(by="fecha_evaluacion")
                 inicial = mis_registros.iloc[0]
                 actual = mis_registros.iloc[-1]
-                
                 diff_peso = float(actual["peso_kg"]) - float(inicial["peso_kg"])
                 diff_cintura = float(actual["cintura_cm"]) - float(inicial["cintura_cm"])
                 diff_grasa = float(actual["porcentaje_grasa"]) - float(inicial["porcentaje_grasa"])
-                
                 st.info(f"📊 Resumen desde tu primer registro ({inicial['fecha_evaluacion']}) hasta hoy ({actual['fecha_evaluacion']}):")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Variación de Peso", f"{actual['peso_kg']} kg", f"{diff_peso:.1f} kg")
                 c2.metric("Variación de Cintura", f"{actual['cintura_cm']} cm", f"{diff_cintura:.1f} cm")
                 c3.metric("Variación % Grasa", f"{actual['porcentaje_grasa']}%", f"{diff_grasa:.1f}%")
-                
                 st.dataframe(mis_registros, use_container_width=True)
             elif len(mis_registros) == 1:
                 st.warning("Solo tienes 1 registro guardado. Registra tus medidas el próximo mes para ver la comparativa de avance.")
@@ -265,30 +255,20 @@ else:
         if not df_usuarios.empty:
             clientes = df_usuarios[df_usuarios["rol"] == "Cliente"]
             st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
-            
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
-            
             if cedula_sel:
                 id_cliente = cedula_sel.split(" - ")[0]
                 u_info = clientes[clientes["cedula"].astype(str) == id_cliente].iloc[0]
-                
                 st.markdown("---")
                 col_u1, col_u2 = st.columns([3, 1])
                 with col_u1:
-                    st.markdown(f"""
-                    * *Nombre:* {u_info['nombre_completo']}
-                    * *Cédula:* {u_info['cedula']}
-                    * *EPS:* {u_info['eps']}
-                    * *Condiciones Físicas:* {u_info['condiciones_medicas']}
-                    """)
+                    st.markdown(f"""* Nombre: {u_info['nombre_completo']}* Cédula: {u_info['cedula']}* EPS: {u_info['eps']}* Condiciones Físicas: {u_info['condiciones_medicas']}""")
                 with col_u2:
                     ws_url = link_whatsapp(u_info['whatsapp'], u_info['nombre_completo'])
                     st.link_button("💬 Enviar WhatsApp", ws_url, use_container_width=True)
-                
                 st.markdown("---")
                 st.subheader("📈 Historial de Avances del Cliente")
                 h_cliente = df_historial[df_historial["cedula"].astype(str) == id_cliente] if not df_historial.empty else pd.DataFrame()
-                
                 if not h_cliente.empty:
                     st.dataframe(h_cliente, use_container_width=True)
                 else:
