@@ -118,7 +118,7 @@ if "autenticado" not in st.session_state:
     st.session_state["cedula"] = None
     st.session_state["nombre"] = None
 
-st.title("🏋️‍♂️ PERSONAL TRAINING & EVOLUTION TRACKER")
+st.title("PERSONAL TRAINING & EVOLUTION TRACKER")
 
 if not st.session_state["autenticado"]:
     col1, col2 = st.columns(2)
@@ -171,7 +171,7 @@ if not st.session_state["autenticado"]:
                     try:
                         requests.post(URL_API, json={"action": "registrar_usuario", "row": nueva_fila})
                         st.cache_data.clear()
-                        st.success("🎉 ¡Perfil creado con éxito! Ya puedes iniciar sesión.")
+                        st.success("¡Perfil creado con éxito! Ya puedes iniciar sesión.")
                     except Exception as e:
                         st.error(f"Error al guardar usuario: {e}")
 
@@ -232,7 +232,7 @@ else:
                     try:
                         requests.post(URL_API, json={"action": "guardar_medidas", "row": fila_medidas})
                         st.cache_data.clear()
-                        st.success("🎉 ¡Medidas guardadas con éxito!")
+                        st.success("¡Medidas guardadas con éxito!")
                         
                         r1, r2, r3, r4 = st.columns(4)
                         r1.metric("IMC", f"{imc}")
