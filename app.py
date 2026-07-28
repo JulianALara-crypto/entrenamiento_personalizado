@@ -8,7 +8,7 @@ from datetime import datetime
 from PIL import Image
 
 # 🔗 TU URL DE GOOGLE APPS SCRIPT
-URL_API = "https://google.com"
+URL_API = "https://script.google.com/macros/s/AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHepWC3iW9JriiQ75laCFCQbs7iaceuH9sVP-XuDo/exec"
 
 ruta_logo = "logo.png"
 icono_pestana = Image.open(ruta_logo) if os.path.exists(ruta_logo) else "🏋️‍♂️"
