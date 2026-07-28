@@ -155,7 +155,7 @@ if not st.session_state["autenticado"]:
         with st.form("form_registro"):
             reg_cedula = st.text_input("Número de Cédula / ID:").strip()
             reg_nombre = st.text_input("Nombre Completo:").strip()
-            reg_whatsapp = st.text_input("Número de Celular (10 dígitos Colombia):", placeholder="3101234567").strip()
+            reg_whatsapp = st.text_input("Número de Celular (10 dígitos Colombia):", placeholder="310.......").strip()
             reg_eps = st.text_input("EPS / Seguro de Salud:").strip()
             reg_condiciones = st.text_area("Condiciones Médicas / Lesiones / Cirugías:").strip()
             reg_pass = st.text_input("Crea tu Contraseña:", type="password").strip()
