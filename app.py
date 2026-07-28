@@ -8,7 +8,7 @@ from datetime import datetime
 from PIL import Image
 
 # 🔗 TU URL DE GOOGLE APPS SCRIPT
-URL_API = "https://script.google.com/macros/s/AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHepWC3iW9JriiQ75laCFCQbs7iaceuH9sVP-XuDo/exec"
+URL_API = "https://google.com"
 
 ruta_logo = "logo.png"
 icono_pestana = Image.open(ruta_logo) if os.path.exists(ruta_logo) else "🏋️‍♂️"
@@ -27,7 +27,7 @@ st.markdown("""
 
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
-    col_l1, col_l2, col_l3 = st.columns(3)
+    col_l1, col_l2, col_l3 = st.columns()
     with col_l2:
         st.image(Image.open(ruta_logo), width=180)
 
@@ -74,7 +74,7 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
     if not mensaje:
         mensaje = f"💪 ¡Hola {nombre_cliente}! Te saludamos de tu plan de Entrenamiento Personalizado. ¡Queremos revisar cómo van tus avances!"
         
-    return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
+    return f"https://wa.me{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
 # --- CARGAR DATOS DESDE GOOGLE SHEETS ---
 @st.cache_data(ttl=2)
@@ -82,7 +82,6 @@ def cargar_bd():
     try:
         res = requests.get(URL_API).json()
         
-        # 👥 Procesar Usuarios
         usuarios_raw = res.get("usuarios", [])
         if len(usuarios_raw) > 1:
             columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
@@ -90,7 +89,6 @@ def cargar_bd():
         else:
             df_u = pd.DataFrame(columns=["cedula", "nombre_completo", "whatsapp", "eps", "condiciones_medicas", "rol", "password", "fecha_registro"])
 
-        # 📈 Procesar Historial
         historial_raw = res.get("historial", [])
         if len(historial_raw) > 1:
             columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
@@ -98,7 +96,6 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Estandarización de columnas de cédula eliminando el ".0" flotante
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -116,7 +113,6 @@ if "autenticado" not in st.session_state:
     st.session_state["nombre"] = None
 
 st.title("🏋️‍♂️ PERSONAL TRAINING & EVOLUTION TRACKER")
-
 # --- LOGIN / REGISTRO ---
 if not st.session_state["autenticado"]:
     col1, col2 = st.columns(2)
@@ -176,7 +172,7 @@ if not st.session_state["autenticado"]:
 # --- PANELES UNA VEZ AUTENTICADO ---
 else:
     st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
-    st.sidebar.markdown(f"*Rol:* {st.session_state['rol']}")
+    st.sidebar.markdown(f"**Rol:** {st.session_state['rol']}")
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state["autenticado"] = False
         st.session_state["rol"] = None
@@ -186,7 +182,6 @@ else:
 
     df_usuarios, df_historial = cargar_bd()
 
-    # --- 👤 MÓDULO CLIENTE ---
     if st.session_state["rol"] == "Cliente":
         opcion = st.sidebar.radio("MENÚ", ["📏 Registrar Medidas Hoy", "📊 Ver Mi Progreso"])
         
@@ -197,12 +192,11 @@ else:
                 peso = c1.number_input("Peso (kg):", 30.0, 200.0, 70.0, 0.5)
                 estatura = c2.number_input("Estatura (cm):", 100.0, 220.0, 170.0, 1.0)
                 edad = c3.number_input("Edad (años):", 10, 90, 25)
-                
                 sexo = c1.selectbox("Sexo Fisiológico:", ["Masculino", "Femenino"])
                 meta = c2.selectbox("Objetivo Principal:", ["Perder Grasa", "Ganar Músculo", "Mantenimiento"])
                 
                 st.markdown("---")
-                st.write("*Medidas Corporales (cm)*")
+                st.write("**Medidas Corporales (cm)**")
                 m1, m2, m3, m4 = st.columns(4)
                 cuello = m1.number_input("Cuello:", 20.0, 60.0, 38.0)
                 hombros = m2.number_input("Hombros:", 50.0, 180.0, 110.0)
@@ -245,49 +239,74 @@ else:
                 mis_registros = mis_registros.sort_values(by="fecha_evaluacion")
                 inicial = mis_registros.iloc[0]
                 actual = mis_registros.iloc[-1]
-                try:
-                    diff_peso = float(actual["peso_kg"]) - float(inicial["peso_kg"])
-                    diff_cintura = float(actual["cintura_cm"]) - float(inicial["cintura_cm"])
-                    diff_grasa = float(actual["porcentaje_grasa"]) - float(inicial["porcentaje_grasa"])
-                except:
-                    diff_peso, diff_cintura, diff_grasa = 0.0, 0.0, 0.0
-                    
-                st.info(f"📊 Resumen desde tu primer registro ({inicial['fecha_evaluacion']}) hasta hoy ({actual['fecha_evaluacion']}):")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Variación de Peso", f"{actual['peso_kg']} kg", f"{diff_peso:.1f} kg")
-                c2.metric("Variación de Cintura", f"{actual['cintura_cm']} cm", f"{diff_cintura:.1f} cm")
-                c3.metric("Variación % Grasa", f"{actual['porcentaje_grasa']}%", f"{diff_grasa:.1f}%")
                 
-                # Conversión estricta a texto antes de mostrar la tabla para evitar errores de PyArrow
-                st.dataframe(mis_registros.astype(str), use_container_width=True)
+                def get_val(row, keys_posibles, default=0.0):
+                    for k in keys_posibles:
+                        if k in row.index:
+                            try: return float(row[k])
+                            except: pass
+                    return default
+                
+                peso_i = get_val(inicial, ["peso_kg", "peso", "peso(kg)"], 70.0)
+                peso_a = get_val(actual, ["peso_kg", "peso", "peso(kg)"], 70.0)
+                cint_i = get_val(inicial, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
+                cint_a = get_val(actual, ["cintura_cm", "cintura", "cintura / abdomen"], 80.0)
+                gras_i = get_val(inicial, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
+                gras_a = get_val(actual, ["porcentaje_grasa", "grasa", "% grasa"], 20.0)
+                
+                diff_peso = peso_a - peso_i
+                diff_cintura = cint_a - cint_i
+                diff_grasa = gras_a - gras_i
+                
+                st.info(f"📊 **Resumen desde tu primer registro ({inicial.get('fecha_evaluacion', 'Inicial')}) hasta hoy ({actual.get('fecha_evaluacion', 'Actual')}):**")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Variación de Peso", f"{peso_a} kg", f"{diff_peso:.1f} kg")
+                c2.metric("Variación de Cintura", f"{cint_a} cm", f"{diff_cintura:.1f} cm")
+                c3.metric("Variación % Grasa", f"{gras_a}%", f"{diff_grasa:.1f}%")
+                
+                st.table(mis_registros.astype(str))
             elif len(mis_registros) == 1:
                 st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa.")
-                st.dataframe(mis_registros.astype(str), use_container_width=True)
+                st.table(mis_registros.astype(str))
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
-    # --- 👑 MÓDULO ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
         st.subheader("👑 Panel de Control General")
         if not df_usuarios.empty:
             clientes = df_usuarios[df_usuarios["rol"].str.lower() == "cliente"]
-            st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
+            st.markdown(f"**Total de Clientes Registrados:** {len(clientes)}")
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
             
             if cedula_sel:
                 id_cliente = cedula_sel.split(" - ")[0].strip()
                 u_info = clientes[clientes["cedula"] == id_cliente].iloc[0]
+                
                 st.markdown("---")
-                col_u1, col_u2 = st.columns([3, 1])
+                col_u1, col_u2 = st.columns(2)
                 with col_u1:
-                    st.markdown(f"""* *Nombre:* {u_info['nombre_completo']}\n* *Cédula:* {u_info['cedula']}\n* *EPS:* {u_info['eps']}\n* *Condiciones Físicas:* {u_info['condiciones_medicas']}""")
+                    st.markdown(f"""
+                    * **Nombre:** {u_info['nombre_completo']}
+                id_cliente = str(cedula_sel.split(" - ")[0]).strip()
+                u_info = clientes[clientes["cedula"] == id_cliente].iloc[0]
+                
+                st.markdown("---")
+                col_u1, col_u2 = st.columns(2)
+                with col_u1:
+                    st.markdown(f"""
+                    * **Nombre:** {u_info['nombre_completo']}
+                    * **Cédula:** {u_info['cedula']}
+                    * **EPS:** {u_info['eps']}
+                    * **Condiciones Físicas:** {u_info['condiciones_medicas']}
+                    """)
                 with col_u2:
                     ws_url = link_whatsapp(u_info['whatsapp'], u_info['nombre_completo'])
                     st.link_button("💬 Enviar WhatsApp", ws_url, use_container_width=True)
+                    
                 st.markdown("---")
                 st.subheader("📈 Historial de Avances del Cliente")
                 h_cliente = df_historial[df_historial["cedula"] == id_cliente] if not df_historial.empty else pd.DataFrame()
                 if not h_cliente.empty:
-                    st.dataframe(h_cliente.astype(str), use_container_width=True)
+                    st.table(h_cliente.astype(str))
                 else:
                     st.warning("Este cliente aún no ha ingresado registros de medidas.")
