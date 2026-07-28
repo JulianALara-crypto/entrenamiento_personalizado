@@ -11,7 +11,7 @@ from PIL import Image
 URL_API = "https://script.google.com/macros/s/AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHepWC3iW9JriiQ75laCFCQbs7iaceuH9sVP-XuDo/exec"
 
 ruta_logo = "logo.png"
-icono_pestana = Image.open(ruta_logo) if os.path.exists(ruta_logo) else "🏋️‍♂️"
+icono_pestana = Image.open(ruta_logo) if os.path.exists(ruta_logo) else ""
 
 st.set_page_config(page_title="Power Training - Personalizado", page_icon=icono_pestana, layout="wide")
 
