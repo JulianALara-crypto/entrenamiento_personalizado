@@ -98,7 +98,7 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Conversión de seguridad para remover decimales (.0) y normalizar como texto limpio
+        # Estandarización de columnas de cédula eliminando el ".0" flotante
         if "cedula" in df_u.columns:
             df_u["cedula"] = df_u["cedula"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         if not df_m.empty and "cedula" in df_m.columns:
@@ -106,7 +106,6 @@ def cargar_bd():
 
         return df_u, df_m
     except Exception as e:
-        st.error(f"Error procesando base de datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # --- AUTENTICACIÓN / SESIÓN ---
@@ -258,10 +257,12 @@ else:
                 c1.metric("Variación de Peso", f"{actual['peso_kg']} kg", f"{diff_peso:.1f} kg")
                 c2.metric("Variación de Cintura", f"{actual['cintura_cm']} cm", f"{diff_cintura:.1f} cm")
                 c3.metric("Variación % Grasa", f"{actual['porcentaje_grasa']}%", f"{diff_grasa:.1f}%")
-                st.dataframe(mis_registros, use_container_width=True)
+                
+                # Conversión estricta a texto antes de mostrar la tabla para evitar errores de PyArrow
+                st.dataframe(mis_registros.astype(str), use_container_width=True)
             elif len(mis_registros) == 1:
                 st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa.")
-                st.dataframe(mis_registros, use_container_width=True)
+                st.dataframe(mis_registros.astype(str), use_container_width=True)
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
@@ -287,6 +288,6 @@ else:
                 st.subheader("📈 Historial de Avances del Cliente")
                 h_cliente = df_historial[df_historial["cedula"] == id_cliente] if not df_historial.empty else pd.DataFrame()
                 if not h_cliente.empty:
-                    st.dataframe(h_cliente, use_container_width=True)
+                    st.dataframe(h_cliente.astype(str), use_container_width=True)
                 else:
                     st.warning("Este cliente aún no ha ingresado registros de medidas.")
