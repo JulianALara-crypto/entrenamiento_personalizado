@@ -76,8 +76,8 @@ def link_whatsapp(num_celular, nombre_cliente, mensaje=""):
         
     return f"https://wa.me/{num_limpio}?text={urllib.parse.quote(mensaje)}"
 
-# --- CARGAR DATOS DESDE GOOGLE SHEETS (OPTIMIZADO) ---
-@st.cache_data(ttl=3)
+# --- CARGAR DATOS DESDE GOOGLE SHEETS (CONVERSION TEXTO ESTRICTA) ---
+@st.cache_data(ttl=2)
 def cargar_bd():
     try:
         res = requests.get(URL_API).json()
@@ -94,10 +94,10 @@ def cargar_bd():
         else:
             df_m = pd.DataFrame(columns=["id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"])
 
-        # Forzar tipo string en las columnas clave para evitar choques numéricos
-        df_u["cedula"] = df_u["cedula"].astype(str).str.strip()
+        # SOLUCIÓN CRÍTICA: Eliminar cualquier ".0" decimal de las cédulas y pasarlas a Texto Puro
+        df_u["cedula"] = df_u["cedula"].astype(str).str.split('.').str[0].str.strip()
         if not df_m.empty:
-            df_m["cedula"] = df_m["cedula"].astype(str).str.strip()
+            df_m["cedula"] = df_m["cedula"].astype(str).str.split('.').str[0].str.strip()
 
         return df_u, df_m
     except Exception as e:
@@ -212,12 +212,13 @@ else:
                 pierna_izq = m1.number_input("Pierna Izq:", 20.0, 90.0, 55.0)
                 gemelo_der = m2.number_input("Gemelo Der:", 15.0, 60.0, 35.0)
                 gemelo_izq = m3.number_input("Gemelo Izq:", 15.0, 60.0, 35.0)
-                
+
                 if st.form_submit_button("Guardar Evaluación"):
                     imc, grasa, cals, edad_bio = calcular_metricas(peso, estatura, edad, sexo, cuello, cintura, cadera, meta)
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
                     fecha_hoy = datetime.today().strftime('%Y-%m-%d')
                     fila_medidas = [id_reg, fecha_hoy, st.session_state['cedula'], edad, sexo, meta, peso, estatura, cuello, hombros, bicep_der, bicep_izq, pecho, cintura, cadera, pierna_der, pierna_izq, gemelo_der, gemelo_izq, imc, grasa, cals, edad_bio]
+                    
                     try:
                         requests.post(URL_API, json={"action": "guardar_medidas", "row": fila_medidas})
                         st.cache_data.clear()
@@ -232,14 +233,20 @@ else:
 
         elif opcion == "📊 Ver Mi Progreso":
             st.subheader("📉 Comparativa de Evolución")
-            mis_registros = df_historial[df_historial["cedula"] == st.session_state['cedula']] if not df_historial.empty else pd.DataFrame()
+            user_id = str(st.session_state['cedula']).strip()
+            mis_registros = df_historial[df_historial["cedula"] == user_id] if not df_historial.empty else pd.DataFrame()
+            
             if len(mis_registros) >= 2:
                 mis_registros = mis_registros.sort_values(by="fecha_evaluacion")
                 inicial = mis_registros.iloc[0]
                 actual = mis_registros.iloc[-1]
-                diff_peso = float(actual["peso_kg"]) - float(inicial["peso_kg"])
-                diff_cintura = float(actual["cintura_cm"]) - float(inicial["cintura_cm"])
-                diff_grasa = float(actual["porcentaje_grasa"]) - float(inicial["porcentaje_grasa"])
+                try:
+                    diff_peso = float(actual["peso_kg"]) - float(inicial["peso_kg"])
+                    diff_cintura = float(actual["cintura_cm"]) - float(inicial["cintura_cm"])
+                    diff_grasa = float(actual["porcentaje_grasa"]) - float(inicial["porcentaje_grasa"])
+                except:
+                    diff_peso, diff_cintura, diff_grasa = 0.0, 0.0, 0.0
+                    
                 st.info(f"📊 Resumen desde tu primer registro ({inicial['fecha_evaluacion']}) hasta hoy ({actual['fecha_evaluacion']}):")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Variación de Peso", f"{actual['peso_kg']} kg", f"{diff_peso:.1f} kg")
@@ -247,10 +254,10 @@ else:
                 c3.metric("Variación % Grasa", f"{actual['porcentaje_grasa']}%", f"{diff_grasa:.1f}%")
                 st.dataframe(mis_registros, use_container_width=True)
             elif len(mis_registros) == 1:
-                st.warning("Solo tienes 1 registro guardado. Registra tus medidas el próximo mes para ver la comparativa de avance.")
+                st.warning("⚠️ Tienes 1 registro guardado con éxito. Guarda una nueva evaluación para poder calcular la comparativa y gráficos de tu evolución.")
                 st.dataframe(mis_registros, use_container_width=True)
             else:
-                st.info("Aún no has registrado ninguna evaluación.")
+                st.info("Aún no has registrado ninguna evaluación física.")
 
     # --- 👑 MÓDULO ADMINISTRADOR ---
     elif st.session_state["rol"] == "Admin":
@@ -259,8 +266,9 @@ else:
             clientes = df_usuarios[df_usuarios["rol"] == "Cliente"]
             st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
             cedula_sel = st.selectbox("Buscar Cliente por Nombre/Cédula:", clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"])
+            
             if cedula_sel:
-                id_cliente = cedula_sel.split(" - ")[0]
+                id_cliente = cedula_sel.split(" - ")[0].strip()
                 u_info = clientes[clientes["cedula"] == id_cliente].iloc[0]
                 st.markdown("---")
                 col_u1, col_u2 = st.columns([3, 1])
