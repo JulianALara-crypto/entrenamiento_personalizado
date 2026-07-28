@@ -29,7 +29,7 @@ st.markdown("""
 if os.path.exists(ruta_logo):
     col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
     with col_l2:
-        st.image(Image.open(ruta_logo), width=180)
+        st.image(Image.open(ruta_logo), width=300)
 
 # --- FUNCIONES DE CÁLCULO FÍSICO Y SALUD ---
 def calcular_metricas(peso, estatura_cm, edad, sexo, cuello, cintura, cadera, meta):
