@@ -20,18 +20,16 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilos visuales en modo oscuro
-st.markdown(
-    """
+# Estilos visuales en modo oscuro (Corregido para negro puro #000000)
+st.markdown("""
     <style>
-        .stApp { background-color: #111111; }
+        .stApp { background-color: #000000; }
         h1, h2, h3, h4 { color: #ffffff !important; text-align: center; }
         p, label, .stMarkdown { color: #dddddd !important; }
         div[data-testid="stDecoration"] { display: none; }
     </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
+
 
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
