@@ -35,7 +35,7 @@ st.markdown(
 
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
-    col_l1, col_l2, col_l3 = st.columns()
+    col_l1, col_l2, col_l3 = st.columns(3)
     with col_l2:
         st.image(Image.open(ruta_logo), use_column_width=True)
 
