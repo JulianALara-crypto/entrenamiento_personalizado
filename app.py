@@ -31,6 +31,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# --- FUNCIÓN AUXILIAR PARA PARSEAR Y FORMATAR FECHAS A DD-MM-YYYY ---
+def formatear_fecha(valor_fecha):
+    if pd.isna(valor_fecha) or not valor_fecha or str(valor_fecha).strip() == "":
+        return ""
+    try:
+        # pd.to_datetime maneja ISO 8601 (2026-07-30T07:00:00.000Z), YYYY-MM-DD, etc.
+        dt = pd.to_datetime(valor_fecha, errors="coerce", utc=True)
+        if pd.isna(dt):
+            return str(valor_fecha)
+        return dt.strftime("%d-%m-%Y")
+    except Exception:
+        return str(valor_fecha)
+
+
 # --- MOSTRAR LOGO CENTRADO EN LA CABECERA ---
 if os.path.exists(ruta_logo):
     col_l1, col_l2, col_l3 = st.columns(3)
@@ -186,6 +200,13 @@ def cargar_bd():
                 .str.strip()
             )
 
+        # --- FORMATEAR FECHAS A DD-MM-YYYY EN AMBOS DATAFRAMES ---
+        if not df_u.empty and "fecha_registro" in df_u.columns:
+            df_u["fecha_registro"] = df_u["fecha_registro"].apply(formatear_fecha)
+
+        if not df_m.empty and "fecha_evaluacion" in df_m.columns:
+            df_m["fecha_evaluacion"] = df_m["fecha_evaluacion"].apply(formatear_fecha)
+
         return df_u, df_m
     except Exception as e:
         st.error(f"Error procesando base de datos: {e}")
@@ -211,15 +232,20 @@ def mostrar_graficos_evolucion(df_filtrado):
         if col in df_graficos.columns:
             df_graficos[col] = pd.to_numeric(df_graficos[col], errors="coerce")
 
-    df_graficos["fecha_evaluacion"] = pd.to_datetime(
-        df_graficos["fecha_evaluacion"], errors="coerce"
+    # Convertir a datetime para ordenar correctamente en los gráficos
+    df_graficos["fecha_dt"] = pd.to_datetime(
+        df_graficos["fecha_evaluacion"], format="%d-%m-%Y", errors="coerce"
     )
-    df_graficos = df_graficos.dropna(subset=["fecha_evaluacion"]).sort_values(
-        by="fecha_evaluacion"
+    # Fallback por si venían con otro formato no parseado
+    if df_graficos["fecha_dt"].isna().any():
+        df_graficos["fecha_dt"] = pd.to_datetime(
+            df_graficos["fecha_evaluacion"], errors="coerce"
+        )
+
+    df_graficos = df_graficos.dropna(subset=["fecha_dt"]).sort_values(
+        by="fecha_dt"
     )
-    df_graficos["Fecha"] = df_graficos["fecha_evaluacion"].dt.strftime(
-        "%Y-%m-%d"
-    )
+    df_graficos["Fecha"] = df_graficos["fecha_dt"].dt.strftime("%d-%m-%Y")
 
     st.markdown("### 📈 Gráficas de Evolución Temporal")
     tab1, tab2, tab3 = st.tabs(
@@ -369,7 +395,7 @@ if not st.session_state["autenticado"]:
                         reg_condiciones if reg_condiciones else "NINGUNA",
                         "Cliente",
                         reg_pass,
-                        datetime.today().strftime("%Y-%m-%d"),
+                        datetime.today().strftime("%d-%m-%Y"),
                     ]
                     try:
                         requests.post(
@@ -473,7 +499,7 @@ else:
                         meta,
                     )
                     id_reg = f"{st.session_state['cedula']}_{datetime.today().strftime('%Y%m%d%H%M')}"
-                    fecha_hoy = datetime.today().strftime("%Y-%m-%d")
+                    fecha_hoy = datetime.today().strftime("%d-%m-%Y")
 
                     fila_medidas = [
                         id_reg,
@@ -530,9 +556,15 @@ else:
             )
 
             if not mis_registros.empty:
-                mis_registros = mis_registros.sort_values(
-                    by="fecha_evaluacion"
+                # Ordenar cronológicamente parseando las fechas DD-MM-YYYY
+                mis_registros["_fecha_dt"] = pd.to_datetime(
+                    mis_registros["fecha_evaluacion"],
+                    format="%d-%m-%Y",
+                    errors="coerce",
                 )
+                mis_registros = mis_registros.sort_values(
+                    by="_fecha_dt"
+                ).drop(columns=["_fecha_dt"])
 
                 if len(mis_registros) >= 2:
                     inicial = mis_registros.iloc[0]
@@ -612,16 +644,16 @@ else:
                 )
                 info_col1, info_col2, info_col3 = st.columns(3)
                 info_col1.markdown(
-                    f"*WhatsApp:* {u_info.get('whatsapp', 'No registra')}"
+                    f"WhatsApp: {u_info.get('whatsapp', 'No registra')}"
                 )
                 info_col2.markdown(
-                    f"*EPS:* {str(u_info.get('eps', 'No registra')).upper()}"
+                    f"EPS: {str(u_info.get('eps', 'No registra')).upper()}"
                 )
                 info_col3.markdown(
-                    f"*Fecha Registro:* {u_info.get('fecha_registro', 'No registra')}"
+                    f"Fecha Registro: {u_info.get('fecha_registro', 'No registra')}"
                 )
                 st.markdown(
-                    f"*Condiciones Médicas / Lesiones:* {u_info.get('condiciones_medicas', 'Ninguna')}"
+                    f"Condiciones Médicas / Lesiones: {u_info.get('condiciones_medicas', 'Ninguna')}"
                 )
 
                 ws_url = link_whatsapp(
@@ -637,10 +669,19 @@ else:
                     if not h_cliente.empty:
                         mostrar_graficos_evolucion(h_cliente)
                         st.markdown("#### 📋 Registros en Tabla")
+
+                        # Ordenar de la más reciente a la más antigua
+                        h_cliente["_fecha_dt"] = pd.to_datetime(
+                            h_cliente["fecha_evaluacion"],
+                            format="%d-%m-%Y",
+                            errors="coerce",
+                        )
+                        h_cliente_ord = h_cliente.sort_values(
+                            by="_fecha_dt", ascending=False
+                        ).drop(columns=["_fecha_dt"])
+
                         st.dataframe(
-                            h_cliente.sort_values(
-                                by="fecha_evaluacion", ascending=False
-                            ).astype(str),
+                            h_cliente_ord.astype(str),
                             use_container_width=True,
                         )
                     else:
