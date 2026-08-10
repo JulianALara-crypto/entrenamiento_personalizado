@@ -13,9 +13,8 @@ from PIL import Image
 # CONFIGURACIÓN GENERAL
 # ============================================================
 
-# 🔗 URL DE GOOGLE APPS SCRIPT
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbzzbleSKF8dwyDzFml41JloddpgflHfpkhC3nyb826NiO73g16zrjW0Ndpf_MymmiOK/exec"
+    "https://script.google.com/macros/s/AKfycbzOqZ3-xIukFJYnEfPBi_PpuC2M06zkfFo6hcvAzGQ8hqjeRGKfoZfBd2EnSoM2SoAQ/exec"
 )
 
 
@@ -23,9 +22,9 @@ URL_API = (
 # RUTA SEGURA DEL LOGO
 # ============================================================
 
-# Buscamos el logo tomando como referencia la ubicación real
-# de este archivo app.py.
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
 ruta_logo = os.path.join(
     BASE_DIR,
@@ -34,7 +33,7 @@ ruta_logo = os.path.join(
 
 
 # ============================================================
-# CARGAR LOGO DE FORMA SEGURA
+# CARGAR LOGO
 # ============================================================
 
 icono_pestana = None
@@ -53,7 +52,7 @@ if os.path.isfile(ruta_logo):
 
 
 # ============================================================
-# CONFIGURACIÓN DE STREAMLIT
+# CONFIGURACIÓN STREAMLIT
 # ============================================================
 
 st.set_page_config(
@@ -64,7 +63,7 @@ st.set_page_config(
 
 
 # ============================================================
-# ESTILOS VISUALES
+# ESTILOS
 # ============================================================
 
 st.markdown(
@@ -95,7 +94,7 @@ st.markdown(
 
 
 # ============================================================
-# FUNCIÓN PARA FORMATEAR FECHAS
+# FUNCIÓN FORMATEAR FECHA
 # ============================================================
 
 def formatear_fecha(valor_fecha):
@@ -116,6 +115,7 @@ def formatear_fecha(valor_fecha):
         )
 
         if pd.isna(dt):
+
             return str(valor_fecha)
 
         return dt.strftime(
@@ -128,7 +128,7 @@ def formatear_fecha(valor_fecha):
 
 
 # ============================================================
-# MOSTRAR LOGO CENTRADO
+# MOSTRAR LOGO
 # ============================================================
 
 if icono_pestana is not None:
@@ -144,7 +144,7 @@ if icono_pestana is not None:
 
 
 # ============================================================
-# CÁLCULO DE MÉTRICAS FÍSICAS
+# CALCULAR MÉTRICAS
 # ============================================================
 
 def calcular_metricas(
@@ -158,25 +158,82 @@ def calcular_metricas(
     meta,
 ):
 
-    estatura_m = estatura_cm / 100.0
+    # --------------------------------------------------------
+    # CONVERSIÓN EXPLÍCITA A FLOAT
+    # --------------------------------------------------------
 
-    imc = peso / (
-        estatura_m ** 2
+    peso = float(peso)
+
+    estatura_cm = float(
+        estatura_cm
     )
+
+    edad = int(edad)
+
+    cuello = float(cuello)
+
+    cintura = float(cintura)
+
+    cadera = float(cadera)
+
+
+    # --------------------------------------------------------
+    # VALIDACIÓN
+    # --------------------------------------------------------
+
+    if peso <= 0:
+
+        raise ValueError(
+            "El peso debe ser mayor que cero."
+        )
+
+    if estatura_cm <= 0:
+
+        raise ValueError(
+            "La estatura debe ser mayor que cero."
+        )
+
+
+    # --------------------------------------------------------
+    # IMC
+    # --------------------------------------------------------
+
+    estatura_m = (
+        estatura_cm / 100.0
+    )
+
+    imc = (
+        peso /
+        (estatura_m ** 2)
+    )
+
+
+    # --------------------------------------------------------
+    # PORCENTAJE DE GRASA
+    # --------------------------------------------------------
 
     try:
 
         if sexo == "Masculino":
 
-            valor_log = cintura - cuello
+            valor_log = (
+                cintura - cuello
+            )
 
             if valor_log <= 0:
+
                 valor_log = 1.0
 
             densidad = (
                 1.0324
-                - 0.19077 * math.log10(valor_log)
-                + 0.15456 * math.log10(estatura_cm)
+                - 0.19077
+                * math.log10(
+                    valor_log
+                )
+                + 0.15456
+                * math.log10(
+                    estatura_cm
+                )
             )
 
             pct_grasa = (
@@ -192,17 +249,25 @@ def calcular_metricas(
             )
 
             if valor_log <= 0:
+
                 valor_log = 1.0
 
             densidad = (
                 1.29579
-                - 0.35004 * math.log10(valor_log)
-                + 0.22100 * math.log10(estatura_cm)
+                - 0.35004
+                * math.log10(
+                    valor_log
+                )
+                + 0.22100
+                * math.log10(
+                    estatura_cm
+                )
             )
 
             pct_grasa = (
                 495 / densidad
             ) - 450
+
 
         pct_grasa = max(
             min(
@@ -212,6 +277,7 @@ def calcular_metricas(
             3.0
         )
 
+
     except Exception:
 
         pct_grasa = (
@@ -219,6 +285,11 @@ def calcular_metricas(
             if sexo == "Masculino"
             else 24.0
         )
+
+
+    # --------------------------------------------------------
+    # TASA METABÓLICA BASAL
+    # --------------------------------------------------------
 
     if sexo == "Masculino":
 
@@ -238,9 +309,19 @@ def calcular_metricas(
             - 161
         )
 
+
+    # --------------------------------------------------------
+    # CALORÍAS DE MANTENIMIENTO
+    # --------------------------------------------------------
+
     mantenimiento = (
         tmb * 1.375
     )
+
+
+    # --------------------------------------------------------
+    # OBJETIVO CALÓRICO
+    # --------------------------------------------------------
 
     if meta == "Perder Grasa":
 
@@ -257,6 +338,11 @@ def calcular_metricas(
     else:
 
         calorias = mantenimiento
+
+
+    # --------------------------------------------------------
+    # EDAD METABÓLICA
+    # --------------------------------------------------------
 
     desvio_imc = max(
         0,
@@ -275,20 +361,48 @@ def calcular_metricas(
 
     edad_metabolica = int(
         edad
-        + (desvio_imc * 0.6)
-        + (desvio_grasa * 0.4)
+        + (
+            desvio_imc
+            * 0.6
+        )
+        + (
+            desvio_grasa
+            * 0.4
+        )
     )
 
+
+    # --------------------------------------------------------
+    # CONVERSIÓN FINAL EXPLÍCITA
+    # --------------------------------------------------------
+
+    imc = float(
+        round(imc, 2)
+    )
+
+    pct_grasa = float(
+        round(pct_grasa, 2)
+    )
+
+    calorias = int(
+        round(calorias)
+    )
+
+    edad_metabolica = int(
+        edad_metabolica
+    )
+
+
     return (
-        round(imc, 1),
-        round(pct_grasa, 1),
-        int(calorias),
+        imc,
+        pct_grasa,
+        calorias,
         edad_metabolica,
     )
 
 
 # ============================================================
-# GENERAR ENLACE DE WHATSAPP
+# WHATSAPP
 # ============================================================
 
 def link_whatsapp(
@@ -308,26 +422,32 @@ def link_whatsapp(
     if not num_limpio.startswith("57"):
 
         num_limpio = (
-            "57" + num_limpio
+            "57"
+            + num_limpio
         )
 
     if not mensaje:
 
         mensaje = (
             f"💪 ¡Hola {nombre_cliente}! "
-            "Te saludamos de tu plan de Entrenamiento "
-            "Personalizado. ¡Queremos revisar cómo van "
+            "Te saludamos de tu plan de "
+            "Entrenamiento Personalizado. "
+            "¡Queremos revisar cómo van "
             "tus avances!"
         )
 
     return (
-        f"https://wa.me/{num_limpio}"
-        f"?text={urllib.parse.quote(mensaje)}"
+        "https://wa.me/"
+        f"{num_limpio}"
+        "?text="
+        + urllib.parse.quote(
+            mensaje
+        )
     )
 
 
 # ============================================================
-# CARGAR DATOS DESDE GOOGLE SHEETS
+# CARGAR BASE DE DATOS
 # ============================================================
 
 @st.cache_data(ttl=2)
@@ -344,6 +464,7 @@ def cargar_bd():
 
         res = respuesta.json()
 
+
         # ====================================================
         # USUARIOS
         # ====================================================
@@ -356,7 +477,9 @@ def cargar_bd():
         if len(usuarios_raw) > 1:
 
             columnas_u = [
-                str(c).strip().lower()
+                str(c)
+                .strip()
+                .lower()
                 for c in usuarios_raw[0]
             ]
 
@@ -385,6 +508,7 @@ def cargar_bd():
                 ]
             )
 
+
         # ====================================================
         # HISTORIAL
         # ====================================================
@@ -397,7 +521,9 @@ def cargar_bd():
         if len(historial_raw) > 1:
 
             columnas_h = [
-                str(c).strip().lower()
+                str(c)
+                .strip()
+                .lower()
                 for c in historial_raw[0]
             ]
 
@@ -441,6 +567,7 @@ def cargar_bd():
                 ]
             )
 
+
         # ====================================================
         # LIMPIAR CÉDULAS
         # ====================================================
@@ -458,9 +585,11 @@ def cargar_bd():
                 .str.strip()
             )
 
+
         if (
             not df_m.empty
-            and "cedula" in df_m.columns
+            and "cedula"
+            in df_m.columns
         ):
 
             df_m["cedula"] = (
@@ -474,36 +603,113 @@ def cargar_bd():
                 .str.strip()
             )
 
+
         # ====================================================
-        # FORMATEAR FECHAS
+        # CONVERTIR COLUMNAS NUMÉRICAS
+        # ====================================================
+
+        columnas_numericas = [
+
+            "edad",
+
+            "peso_kg",
+
+            "estatura_cm",
+
+            "cuello_cm",
+
+            "hombros_cm",
+
+            "bicep_der_cm",
+
+            "bicep_izq_cm",
+
+            "pecho_cm",
+
+            "cintura_cm",
+
+            "cadera_cm",
+
+            "pierna_der_cm",
+
+            "pierna_izq_cm",
+
+            "gemelo_der_cm",
+
+            "gemelo_izq_cm",
+
+            "imc",
+
+            "porcentaje_grasa",
+
+            "calorias_objetivo",
+
+            "edad_metabolica",
+
+        ]
+
+
+        for columna in columnas_numericas:
+
+            if columna in df_m.columns:
+
+                df_m[columna] = pd.to_numeric(
+                    df_m[columna],
+                    errors="coerce"
+                )
+
+
+        # ====================================================
+        # FECHAS
         # ====================================================
 
         if (
             not df_u.empty
-            and "fecha_registro" in df_u.columns
+            and "fecha_registro"
+            in df_u.columns
         ):
 
-            df_u["fecha_registro"] = (
-                df_u["fecha_registro"]
-                .apply(formatear_fecha)
+            df_u[
+                "fecha_registro"
+            ] = (
+                df_u[
+                    "fecha_registro"
+                ]
+                .apply(
+                    formatear_fecha
+                )
             )
+
 
         if (
             not df_m.empty
-            and "fecha_evaluacion" in df_m.columns
+            and "fecha_evaluacion"
+            in df_m.columns
         ):
 
-            df_m["fecha_evaluacion"] = (
-                df_m["fecha_evaluacion"]
-                .apply(formatear_fecha)
+            df_m[
+                "fecha_evaluacion"
+            ] = (
+                df_m[
+                    "fecha_evaluacion"
+                ]
+                .apply(
+                    formatear_fecha
+                )
             )
 
-        return df_u, df_m
+
+        return (
+            df_u,
+            df_m
+        )
+
 
     except Exception as e:
 
         st.error(
-            f"Error procesando base de datos: {e}"
+            "Error procesando base de datos: "
+            f"{e}"
         )
 
         return (
@@ -513,7 +719,7 @@ def cargar_bd():
 
 
 # ============================================================
-# GRÁFICOS DE EVOLUCIÓN
+# GRÁFICOS
 # ============================================================
 
 def mostrar_graficos_evolucion(
@@ -521,62 +727,102 @@ def mostrar_graficos_evolucion(
 ):
 
     if df_filtrado.empty:
+
         return
+
 
     df_graficos = (
         df_filtrado.copy()
     )
 
+
     columnas_num = [
+
         "peso_kg",
+
         "porcentaje_grasa",
+
         "cintura_cm",
+
         "pecho_cm",
+
         "cadera_cm",
+
         "bicep_der_cm",
+
         "bicep_izq_cm",
+
     ]
+
 
     for col in columnas_num:
 
         if col in df_graficos.columns:
 
-            df_graficos[col] = pd.to_numeric(
-                df_graficos[col],
-                errors="coerce"
+            df_graficos[col] = (
+                pd.to_numeric(
+                    df_graficos[col],
+                    errors="coerce"
+                )
             )
 
-    # ========================================================
-    # FECHA PARA ORDENAMIENTO
-    # ========================================================
 
-    df_graficos["fecha_dt"] = pd.to_datetime(
-        df_graficos["fecha_evaluacion"],
+    df_graficos[
+        "fecha_dt"
+    ] = pd.to_datetime(
+        df_graficos[
+            "fecha_evaluacion"
+        ],
         format="%d-%m-%Y",
         errors="coerce"
     )
 
-    if df_graficos["fecha_dt"].isna().any():
 
-        df_graficos["fecha_dt"] = pd.to_datetime(
-            df_graficos["fecha_evaluacion"],
+    if (
+        df_graficos[
+            "fecha_dt"
+        ].isna().any()
+    ):
+
+        df_graficos[
+            "fecha_dt"
+        ] = pd.to_datetime(
+            df_graficos[
+                "fecha_evaluacion"
+            ],
             errors="coerce"
         )
 
+
     df_graficos = (
         df_graficos
-        .dropna(subset=["fecha_dt"])
-        .sort_values(by="fecha_dt")
+        .dropna(
+            subset=[
+                "fecha_dt"
+            ]
+        )
+        .sort_values(
+            by="fecha_dt"
+        )
     )
 
-    df_graficos["Fecha"] = (
-        df_graficos["fecha_dt"]
-        .dt.strftime("%d-%m-%Y")
+
+    df_graficos[
+        "Fecha"
+    ] = (
+        df_graficos[
+            "fecha_dt"
+        ]
+        .dt.strftime(
+            "%d-%m-%Y"
+        )
     )
+
 
     st.markdown(
         "### 📈 Gráficas de Evolución Temporal"
     )
+
 
     tab1, tab2, tab3 = st.tabs(
         [
@@ -586,13 +832,11 @@ def mostrar_graficos_evolucion(
         ]
     )
 
-    # ========================================================
-    # TAB 1
-    # ========================================================
 
     with tab1:
 
         col_g1, col_g2 = st.columns(2)
+
 
         with col_g1:
 
@@ -605,10 +849,13 @@ def mostrar_graficos_evolucion(
 
             df_peso = (
                 df_graficos
-                .set_index("Fecha")[["peso_kg"]]
+                .set_index("Fecha")[
+                    ["peso_kg"]
+                ]
                 .rename(
                     columns={
-                        "peso_kg": "Peso (kg)"
+                        "peso_kg":
+                        "Peso (kg)"
                     }
                 )
             )
@@ -616,6 +863,7 @@ def mostrar_graficos_evolucion(
             st.line_chart(
                 df_peso
             )
+
 
         with col_g2:
 
@@ -629,11 +877,14 @@ def mostrar_graficos_evolucion(
             df_grasa = (
                 df_graficos
                 .set_index("Fecha")[
-                    ["porcentaje_grasa"]
+                    [
+                        "porcentaje_grasa"
+                    ]
                 ]
                 .rename(
                     columns={
-                        "porcentaje_grasa": "% Grasa"
+                        "porcentaje_grasa":
+                        "% Grasa"
                     }
                 )
             )
@@ -642,9 +893,6 @@ def mostrar_graficos_evolucion(
                 df_grasa
             )
 
-    # ========================================================
-    # TAB 2
-    # ========================================================
 
     with tab2:
 
@@ -656,9 +904,14 @@ def mostrar_graficos_evolucion(
         )
 
         columnas_perimetros = []
+
         nombres_perimetros = {}
 
-        if "cintura_cm" in df_graficos.columns:
+
+        if (
+            "cintura_cm"
+            in df_graficos.columns
+        ):
 
             columnas_perimetros.append(
                 "cintura_cm"
@@ -668,7 +921,11 @@ def mostrar_graficos_evolucion(
                 "cintura_cm"
             ] = "Cintura"
 
-        if "pecho_cm" in df_graficos.columns:
+
+        if (
+            "pecho_cm"
+            in df_graficos.columns
+        ):
 
             columnas_perimetros.append(
                 "pecho_cm"
@@ -678,7 +935,11 @@ def mostrar_graficos_evolucion(
                 "pecho_cm"
             ] = "Pecho"
 
-        if "cadera_cm" in df_graficos.columns:
+
+        if (
+            "cadera_cm"
+            in df_graficos.columns
+        ):
 
             columnas_perimetros.append(
                 "cadera_cm"
@@ -688,6 +949,7 @@ def mostrar_graficos_evolucion(
                 "cadera_cm"
             ] = "Cadera/Glúteos"
 
+
         if columnas_perimetros:
 
             df_peri = (
@@ -696,7 +958,8 @@ def mostrar_graficos_evolucion(
                     columnas_perimetros
                 ]
                 .rename(
-                    columns=nombres_perimetros
+                    columns=
+                    nombres_perimetros
                 )
             )
 
@@ -704,9 +967,6 @@ def mostrar_graficos_evolucion(
                 df_peri
             )
 
-    # ========================================================
-    # TAB 3
-    # ========================================================
 
     with tab3:
 
@@ -718,9 +978,14 @@ def mostrar_graficos_evolucion(
         )
 
         columnas_brazos = []
+
         nombres_brazos = {}
 
-        if "bicep_der_cm" in df_graficos.columns:
+
+        if (
+            "bicep_der_cm"
+            in df_graficos.columns
+        ):
 
             columnas_brazos.append(
                 "bicep_der_cm"
@@ -730,7 +995,11 @@ def mostrar_graficos_evolucion(
                 "bicep_der_cm"
             ] = "Bícep Derecho"
 
-        if "bicep_izq_cm" in df_graficos.columns:
+
+        if (
+            "bicep_izq_cm"
+            in df_graficos.columns
+        ):
 
             columnas_brazos.append(
                 "bicep_izq_cm"
@@ -739,6 +1008,7 @@ def mostrar_graficos_evolucion(
             nombres_brazos[
                 "bicep_izq_cm"
             ] = "Bícep Izquierdo"
+
 
         if columnas_brazos:
 
@@ -758,15 +1028,26 @@ def mostrar_graficos_evolucion(
 
 
 # ============================================================
-# AUTENTICACIÓN Y ESTADO DE SESIÓN
+# ESTADO DE SESIÓN
 # ============================================================
 
 if "autenticado" not in st.session_state:
 
-    st.session_state["autenticado"] = False
-    st.session_state["rol"] = None
-    st.session_state["cedula"] = None
-    st.session_state["nombre"] = None
+    st.session_state[
+        "autenticado"
+    ] = False
+
+    st.session_state[
+        "rol"
+    ] = None
+
+    st.session_state[
+        "cedula"
+    ] = None
+
+    st.session_state[
+        "nombre"
+    ] = None
 
 
 # ============================================================
@@ -782,12 +1063,15 @@ st.title(
 # LOGIN / REGISTRO
 # ============================================================
 
-if not st.session_state["autenticado"]:
+if not st.session_state[
+    "autenticado"
+]:
 
     col1, col2 = st.columns(2)
 
+
     # ========================================================
-    # INICIAR SESIÓN
+    # LOGIN
     # ========================================================
 
     with col1:
@@ -805,14 +1089,17 @@ if not st.session_state["autenticado"]:
             type="password"
         ).strip()
 
+
         if st.button(
             "Ingresar",
             use_container_width=True
         ):
 
             if (
-                cedula_ingreso == "admin"
-                and pass_ingreso == "admin123456"
+                cedula_ingreso
+                == "admin"
+                and pass_ingreso
+                == "admin123456"
             ):
 
                 st.session_state[
@@ -833,28 +1120,37 @@ if not st.session_state["autenticado"]:
 
                 st.rerun()
 
+
             else:
 
                 df_usuarios, _ = (
                     cargar_bd()
                 )
 
+
                 if (
                     not df_usuarios.empty
                     and cedula_ingreso
-                    in df_usuarios["cedula"].values
+                    in df_usuarios[
+                        "cedula"
+                    ].values
                 ):
 
                     u = (
                         df_usuarios[
-                            df_usuarios["cedula"]
+                            df_usuarios[
+                                "cedula"
+                            ]
                             == cedula_ingreso
                         ]
                         .iloc[0]
                     )
 
+
                     if (
-                        str(u["password"]).strip()
+                        str(
+                            u["password"]
+                        ).strip()
                         == pass_ingreso
                     ):
 
@@ -883,11 +1179,13 @@ if not st.session_state["autenticado"]:
 
                         st.rerun()
 
+
                     else:
 
                         st.error(
                             "❌ Contraseña incorrecta."
                         )
+
 
                 else:
 
@@ -895,8 +1193,9 @@ if not st.session_state["autenticado"]:
                         "❌ Cédula no registrada."
                     )
 
+
     # ========================================================
-    # CREAR CUENTA
+    # REGISTRO
     # ========================================================
 
     with col2:
@@ -904,6 +1203,7 @@ if not st.session_state["autenticado"]:
         st.subheader(
             "📝 Crear Cuenta Nueva"
         )
+
 
         with st.form(
             "form_registro"
@@ -935,6 +1235,7 @@ if not st.session_state["autenticado"]:
                 type="password"
             ).strip()
 
+
             if st.form_submit_button(
                 "Crear Perfil"
             ):
@@ -942,6 +1243,7 @@ if not st.session_state["autenticado"]:
                 df_usuarios, _ = (
                     cargar_bd()
                 )
+
 
                 if (
                     not reg_cedula
@@ -954,48 +1256,67 @@ if not st.session_state["autenticado"]:
                         "son obligatorios."
                     )
 
+
                 elif (
                     not df_usuarios.empty
                     and reg_cedula
-                    in df_usuarios["cedula"].values
+                    in df_usuarios[
+                        "cedula"
+                    ].values
                 ):
 
                     st.error(
                         "❌ Esta cédula ya está registrada."
                     )
 
+
                 else:
 
                     nueva_fila = [
+
                         reg_cedula,
+
                         reg_nombre,
+
                         reg_whatsapp,
+
                         (
                             reg_eps
                             if reg_eps
                             else "NINGUNA"
                         ),
+
                         (
                             reg_condiciones
                             if reg_condiciones
                             else "NINGUNA"
                         ),
+
                         "Cliente",
+
                         reg_pass,
-                        datetime.today().strftime(
+
+                        datetime.today()
+                        .strftime(
                             "%d-%m-%Y"
                         ),
+
                     ]
+
 
                     try:
 
-                        respuesta_registro = requests.post(
-                            URL_API,
-                            json={
-                                "action": "registrar_usuario",
-                                "row": nueva_fila,
-                            },
-                            timeout=30,
+                        respuesta_registro = (
+                            requests.post(
+                                URL_API,
+                                json={
+                                    "action":
+                                    "registrar_usuario",
+                                    "row":
+                                    nueva_fila,
+                                },
+                                timeout=30,
+                            )
                         )
 
                         respuesta_registro.raise_for_status()
@@ -1007,6 +1328,7 @@ if not st.session_state["autenticado"]:
                             "Ya puedes iniciar sesión."
                         )
 
+
                     except Exception as e:
 
                         st.error(
@@ -1015,18 +1337,21 @@ if not st.session_state["autenticado"]:
 
 
 # ============================================================
-# APLICACIÓN DESPUÉS DEL LOGIN
+# APLICACIÓN AUTENTICADA
 # ============================================================
 
 else:
 
     st.sidebar.markdown(
-        f"### 👤 {st.session_state['nombre']}"
+        f"### 👤 "
+        f"{st.session_state['nombre']}"
     )
 
     st.sidebar.markdown(
-        f"Rol: {st.session_state['rol']}"
+        f"Rol: "
+        f"{st.session_state['rol']}"
     )
+
 
     if st.sidebar.button(
         "Cerrar Sesión"
@@ -1050,9 +1375,11 @@ else:
 
         st.rerun()
 
+
     df_usuarios, df_historial = (
         cargar_bd()
     )
+
 
     # ========================================================
     # CLIENTE
@@ -1071,6 +1398,7 @@ else:
             ],
         )
 
+
         # ====================================================
         # REGISTRAR MEDIDAS
         # ====================================================
@@ -1084,11 +1412,13 @@ else:
                 "Registro de Evaluación Antropométrica"
             )
 
+
             with st.form(
                 "form_medidas_cliente"
             ):
 
                 c1, c2, c3 = st.columns(3)
+
 
                 peso = c1.number_input(
                     "Peso (kg):",
@@ -1098,6 +1428,7 @@ else:
                     0.5,
                 )
 
+
                 estatura = c2.number_input(
                     "Estatura (cm):",
                     100.0,
@@ -1106,12 +1437,14 @@ else:
                     1.0,
                 )
 
+
                 edad = c3.number_input(
                     "Edad (años):",
                     10,
                     90,
                     25,
                 )
+
 
                 sexo = c1.selectbox(
                     "Sexo Fisiológico:",
@@ -1120,6 +1453,7 @@ else:
                         "Femenino",
                     ],
                 )
+
 
                 meta = c2.selectbox(
                     "Objetivo Principal:",
@@ -1130,20 +1464,27 @@ else:
                     ],
                 )
 
-                st.markdown("---")
+
+                st.markdown(
+                    "---"
+                )
+
 
                 st.write(
                     "### 📏 Medidas Corporales (cm) — "
                     "Ordenado de Cabeza a Pies"
                 )
 
+
                 col_izq, col_der = st.columns(2)
+
 
                 with col_izq:
 
                     st.markdown(
                         "💥 Tren Superior y Torso"
                     )
+
 
                     cuello = st.number_input(
                         "1. Cuello:",
@@ -1152,12 +1493,14 @@ else:
                         38.0,
                     )
 
+
                     hombros = st.number_input(
                         "2. Hombros:",
                         50.0,
                         180.0,
                         110.0,
                     )
+
 
                     pecho = st.number_input(
                         "3. Pecho:",
@@ -1166,12 +1509,14 @@ else:
                         95.0,
                     )
 
+
                     cintura = st.number_input(
                         "4. Cintura / Abdomen:",
                         40.0,
                         180.0,
                         80.0,
                     )
+
 
                     cadera = st.number_input(
                         "5. Glúteos / Cadera:",
@@ -1180,11 +1525,14 @@ else:
                         95.0,
                     )
 
+
                 with col_der:
 
                     st.markdown(
-                        "💪 Extremidades (Brazos y Piernas)"
+                        "💪 Extremidades "
+                        "(Brazos y Piernas)"
                     )
+
 
                     bicep_der = st.number_input(
                         "6. Bícep Derecho:",
@@ -1193,12 +1541,14 @@ else:
                         32.0,
                     )
 
+
                     bicep_izq = st.number_input(
                         "7. Bícep Izquierdo:",
                         15.0,
                         60.0,
                         32.0,
                     )
+
 
                     pierna_der = st.number_input(
                         "8. Pierna Derecha:",
@@ -1207,12 +1557,14 @@ else:
                         55.0,
                     )
 
+
                     pierna_izq = st.number_input(
                         "9. Pierna Izquierda:",
                         20.0,
                         90.0,
                         55.0,
                     )
+
 
                     gemelo_der = st.number_input(
                         "10. Gemelo Derecho:",
@@ -1221,6 +1573,7 @@ else:
                         35.0,
                     )
 
+
                     gemelo_izq = st.number_input(
                         "11. Gemelo Izquierdo:",
                         15.0,
@@ -1228,109 +1581,323 @@ else:
                         35.0,
                     )
 
+
                 if st.form_submit_button(
                     "Guardar Evaluación"
                 ):
 
-                    (
-                        imc,
-                        grasa,
-                        cals,
-                        edad_bio,
-                    ) = calcular_metricas(
-                        peso,
-                        estatura,
-                        edad,
-                        sexo,
-                        cuello,
-                        cintura,
-                        cadera,
-                        meta,
-                    )
-
-                    id_reg = (
-                        f"{st.session_state['cedula']}_"
-                        f"{datetime.today().strftime('%Y%m%d%H%M')}"
-                    )
-
-                    fecha_hoy = (
-                        datetime.today().strftime(
-                            "%d-%m-%Y"
-                        )
-                    )
-
-                    fila_medidas = [
-                        id_reg,
-                        fecha_hoy,
-                        st.session_state["cedula"],
-                        edad,
-                        sexo,
-                        meta,
-                        peso,
-                        estatura,
-                        cuello,
-                        hombros,
-                        bicep_der,
-                        bicep_izq,
-                        pecho,
-                        cintura,
-                        cadera,
-                        pierna_der,
-                        pierna_izq,
-                        gemelo_der,
-                        gemelo_izq,
-                        imc,
-                        grasa,
-                        cals,
-                        edad_bio,
-                    ]
-
                     try:
 
-                        respuesta_medidas = requests.post(
-                            URL_API,
-                            json={
-                                "action": "guardar_medidas",
-                                "row": fila_medidas,
-                            },
-                            timeout=30,
+                        (
+                            imc,
+                            grasa,
+                            cals,
+                            edad_bio,
+                        ) = calcular_metricas(
+
+                            peso,
+
+                            estatura,
+
+                            edad,
+
+                            sexo,
+
+                            cuello,
+
+                            cintura,
+
+                            cadera,
+
+                            meta,
+
                         )
+
+
+                        # ==================================
+                        # VALIDACIÓN DEL IMC
+                        # ==================================
+
+                        if (
+                            imc < 10
+                            or imc > 60
+                        ):
+
+                            st.error(
+                                "⚠️ El IMC calculado "
+                                f"({imc}) está fuera de "
+                                "un rango razonable. "
+                                "Revisa peso y estatura."
+                            )
+
+                            st.stop()
+
+
+                        # ==================================
+                        # ID Y FECHA
+                        # ==================================
+
+                        id_reg = (
+                            f"{st.session_state['cedula']}_"
+                            f"{datetime.today().strftime('%Y%m%d%H%M')}"
+                        )
+
+
+                        fecha_hoy = (
+                            datetime.today()
+                            .strftime(
+                                "%d-%m-%Y"
+                            )
+                        )
+
+
+                        # ==================================
+                        # FILA FINAL
+                        #
+                        # MUY IMPORTANTE:
+                        # IMC, GRASA, CALORÍAS Y EDAD
+                        # SON CONVERTIDOS EXPLÍCITAMENTE
+                        # A TIPOS NUMÉRICOS.
+                        # ==================================
+
+                        fila_medidas = [
+
+                            str(
+                                id_reg
+                            ),
+
+                            str(
+                                fecha_hoy
+                            ),
+
+                            str(
+                                st.session_state[
+                                    "cedula"
+                                ]
+                            ),
+
+                            int(
+                                edad
+                            ),
+
+                            str(
+                                sexo
+                            ),
+
+                            str(
+                                meta
+                            ),
+
+                            float(
+                                peso
+                            ),
+
+                            float(
+                                estatura
+                            ),
+
+                            float(
+                                cuello
+                            ),
+
+                            float(
+                                hombros
+                            ),
+
+                            float(
+                                bicep_der
+                            ),
+
+                            float(
+                                bicep_izq
+                            ),
+
+                            float(
+                                pecho
+                            ),
+
+                            float(
+                                cintura
+                            ),
+
+                            float(
+                                cadera
+                            ),
+
+                            float(
+                                pierna_der
+                            ),
+
+                            float(
+                                pierna_izq
+                            ),
+
+                            float(
+                                gemelo_der
+                            ),
+
+                            float(
+                                gemelo_izq
+                            ),
+
+                            float(
+                                imc
+                            ),
+
+                            float(
+                                grasa
+                            ),
+
+                            int(
+                                cals
+                            ),
+
+                            int(
+                                edad_bio
+                            ),
+
+                        ]
+
+
+                        # ==================================
+                        # DEBUG TEMPORAL
+                        # ==================================
+
+                        st.write(
+                            "### 🔎 Valores calculados"
+                        )
+
+                        st.write(
+                            {
+                                "Peso":
+                                peso,
+
+                                "Estatura":
+                                estatura,
+
+                                "IMC":
+                                imc,
+
+                                "% Grasa":
+                                grasa,
+
+                                "Calorías":
+                                cals,
+
+                                "Edad metabólica":
+                                edad_bio,
+                            }
+                        )
+
+
+                        # ==================================
+                        # ENVIAR A GOOGLE APPS SCRIPT
+                        # ==================================
+
+                        respuesta_medidas = (
+                            requests.post(
+
+                                URL_API,
+
+                                json={
+                                    "action":
+                                    "guardar_medidas",
+
+                                    "row":
+                                    fila_medidas,
+                                },
+
+                                timeout=30,
+
+                            )
+                        )
+
 
                         respuesta_medidas.raise_for_status()
 
+
+                        # Intentar leer respuesta del API
+
+                        try:
+
+                            resultado_api = (
+                                respuesta_medidas.json()
+                            )
+
+                        except Exception:
+
+                            resultado_api = {}
+
+
+                        if (
+                            resultado_api.get(
+                                "status"
+                            )
+                            == "error"
+                        ):
+
+                            st.error(
+                                "❌ Google Apps Script "
+                                "reportó un error: "
+                                + str(
+                                    resultado_api.get(
+                                        "message",
+                                        "Error desconocido"
+                                    )
+                                )
+                            )
+
+                            st.stop()
+
+
                         st.cache_data.clear()
+
 
                         st.success(
                             "¡Medidas guardadas con éxito!"
                         )
 
-                        r1, r2, r3, r4 = st.columns(4)
+
+                        # ==================================
+                        # MOSTRAR RESULTADOS
+                        # ==================================
+
+                        r1, r2, r3, r4 = (
+                            st.columns(4)
+                        )
+
 
                         r1.metric(
                             "IMC",
-                            f"{imc}"
+                            f"{imc:.2f}"
                         )
+
 
                         r2.metric(
                             "% Grasa Estimada",
-                            f"{grasa}%"
+                            f"{grasa:.2f}%"
                         )
+
 
                         r3.metric(
                             "Calorías Recomendadas",
                             f"{cals} kcal"
                         )
 
+
                         r4.metric(
-                            "Edad Aparentada (Salud)",
+                            "Edad Metabólica",
                             f"{edad_bio} años"
                         )
+
 
                     except Exception as e:
 
                         st.error(
-                            f"Error al enviar datos: {e}"
+                            "❌ Error calculando o "
+                            f"guardando las medidas: {e}"
                         )
+
 
         # ====================================================
         # VER PROGRESO
@@ -1345,18 +1912,29 @@ else:
                 "📉 Comparativa de Evolución"
             )
 
+
             user_id = str(
-                st.session_state["cedula"]
+                st.session_state[
+                    "cedula"
+                ]
             ).strip()
 
+
             mis_registros = (
+
                 df_historial[
-                    df_historial["cedula"]
+                    df_historial[
+                        "cedula"
+                    ]
                     == user_id
                 ]
+
                 if not df_historial.empty
+
                 else pd.DataFrame()
+
             )
+
 
             if not mis_registros.empty:
 
@@ -1364,27 +1942,40 @@ else:
                     mis_registros.copy()
                 )
 
-                mis_registros["_fecha_dt"] = (
-                    pd.to_datetime(
-                        mis_registros[
-                            "fecha_evaluacion"
-                        ],
-                        format="%d-%m-%Y",
-                        errors="coerce",
-                    )
+
+                mis_registros[
+                    "_fecha_dt"
+                ] = pd.to_datetime(
+
+                    mis_registros[
+                        "fecha_evaluacion"
+                    ],
+
+                    format="%d-%m-%Y",
+
+                    errors="coerce",
+
                 )
+
 
                 mis_registros = (
                     mis_registros
+
                     .sort_values(
                         by="_fecha_dt"
                     )
+
                     .drop(
-                        columns=["_fecha_dt"]
+                        columns=[
+                            "_fecha_dt"
+                        ]
                     )
                 )
 
-                if len(mis_registros) >= 2:
+
+                if len(
+                    mis_registros
+                ) >= 2:
 
                     inicial = (
                         mis_registros.iloc[0]
@@ -1394,6 +1985,7 @@ else:
                         mis_registros.iloc[-1]
                     )
 
+
                     def get_val(
                         row,
                         keys_posibles,
@@ -1402,7 +1994,10 @@ else:
 
                         for k in keys_posibles:
 
-                            if k in row.index:
+                            if (
+                                k
+                                in row.index
+                            ):
 
                                 try:
 
@@ -1416,6 +2011,7 @@ else:
 
                         return default
 
+
                     peso_i = get_val(
                         inicial,
                         [
@@ -1424,6 +2020,7 @@ else:
                         ],
                         70.0,
                     )
+
 
                     peso_a = get_val(
                         actual,
@@ -1434,6 +2031,7 @@ else:
                         70.0,
                     )
 
+
                     cint_i = get_val(
                         inicial,
                         [
@@ -1442,6 +2040,7 @@ else:
                         ],
                         80.0,
                     )
+
 
                     cint_a = get_val(
                         actual,
@@ -1452,6 +2051,7 @@ else:
                         80.0,
                     )
 
+
                     gras_i = get_val(
                         inicial,
                         [
@@ -1460,6 +2060,7 @@ else:
                         ],
                         20.0,
                     )
+
 
                     gras_a = get_val(
                         actual,
@@ -1470,24 +2071,35 @@ else:
                         20.0,
                     )
 
+
                     diff_peso = (
-                        peso_a - peso_i
+                        peso_a
+                        - peso_i
                     )
+
 
                     diff_cintura = (
-                        cint_a - cint_i
+                        cint_a
+                        - cint_i
                     )
 
+
                     diff_grasa = (
-                        gras_a - gras_i
+                        gras_a
+                        - gras_i
                     )
+
 
                     st.info(
                         "📊 Resumen desde tu primer "
                         "registro hasta hoy:"
                     )
 
-                    c1, c2, c3 = st.columns(3)
+
+                    c1, c2, c3 = (
+                        st.columns(3)
+                    )
+
 
                     c1.metric(
                         "Variación de Peso",
@@ -1495,11 +2107,13 @@ else:
                         f"{diff_peso:.1f} kg",
                     )
 
+
                     c2.metric(
                         "Variación de Cintura",
                         f"{cint_a} cm",
                         f"{diff_cintura:.1f} cm",
                     )
+
 
                     c3.metric(
                         "Variación % Grasa",
@@ -1507,18 +2121,25 @@ else:
                         f"{diff_grasa:.1f}%",
                     )
 
+
                 mostrar_graficos_evolucion(
                     mis_registros
                 )
 
+
                 st.markdown(
-                    "#### 📋 Historial de Registros Completos"
+                    "#### 📋 Historial de "
+                    "Registros Completos"
                 )
 
+
                 st.dataframe(
-                    mis_registros.astype(str),
+                    mis_registros.astype(
+                        str
+                    ),
                     use_container_width=True,
                 )
+
 
             else:
 
@@ -1526,6 +2147,7 @@ else:
                     "Aún no has registrado ninguna "
                     "evaluación física."
                 )
+
 
     # ========================================================
     # ADMINISTRADOR
@@ -1540,30 +2162,43 @@ else:
             "Panel de Control General"
         )
 
+
         if not df_usuarios.empty:
 
             clientes = (
                 df_usuarios[
-                    df_usuarios["rol"]
+                    df_usuarios[
+                        "rol"
+                    ]
                     .astype(str)
                     .str.lower()
                     == "cliente"
                 ]
             )
 
+
             st.markdown(
-                f"Total de Clientes Registrados: "
+                "Total de Clientes Registrados: "
                 f"{len(clientes)}"
             )
 
+
             if not clientes.empty:
 
-                cedula_sel = st.selectbox(
-                    "Buscar Cliente por Nombre/Cédula:",
-                    clientes["cedula"].astype(str)
-                    + " - "
-                    + clientes["nombre_completo"].astype(str),
+                cedula_sel = (
+                    st.selectbox(
+                        "Buscar Cliente "
+                        "por Nombre/Cédula:",
+                        clientes[
+                            "cedula"
+                        ].astype(str)
+                        + " - "
+                        + clientes[
+                            "nombre_completo"
+                        ].astype(str),
+                    )
                 )
+
 
                 if cedula_sel:
 
@@ -1575,10 +2210,16 @@ else:
                         .strip()
                     )
 
-                    cliente_encontrado = clientes[
-                        clientes["cedula"]
-                        == id_cliente
-                    ]
+
+                    cliente_encontrado = (
+                        clientes[
+                            clientes[
+                                "cedula"
+                            ]
+                            == id_cliente
+                        ]
+                    )
+
 
                     if not cliente_encontrado.empty:
 
@@ -1587,37 +2228,47 @@ else:
                             .iloc[0]
                         )
 
-                        st.markdown("---")
+
+                        st.markdown(
+                            "---"
+                        )
+
 
                         st.markdown(
                             f"### 📋 Información de: "
                             f"{u_info['nombre_completo']}"
                         )
 
+
                         info_col1, info_col2, info_col3 = (
                             st.columns(3)
                         )
 
+
                         info_col1.markdown(
-                            f"WhatsApp: "
+                            "WhatsApp: "
                             f"{u_info.get('whatsapp', 'No registra')}"
                         )
 
+
                         info_col2.markdown(
-                            f"EPS: "
+                            "EPS: "
                             f"{str(u_info.get('eps', 'No registra')).upper()}"
                         )
 
+
                         info_col3.markdown(
-                            f"Fecha Registro: "
+                            "Fecha Registro: "
                             f"{u_info.get('fecha_registro', 'No registra')}"
                         )
+
 
                         st.markdown(
                             "Condiciones Médicas / "
                             "Lesiones: "
                             f"{u_info.get('condiciones_medicas', 'Ninguna')}"
                         )
+
 
                         ws_url = link_whatsapp(
                             u_info.get(
@@ -1629,16 +2280,19 @@ else:
                             ],
                         )
 
+
                         st.markdown(
                             f"[💬 Enviar Mensaje de "
                             f"Seguimiento por WhatsApp]"
                             f"({ws_url})"
                         )
 
+
                         st.markdown(
-                            "#### 📈 Historial y Progreso "
-                            "del Cliente"
+                            "#### 📈 Historial y "
+                            "Progreso del Cliente"
                         )
+
 
                         if not df_historial.empty:
 
@@ -1651,32 +2305,43 @@ else:
                                 ].copy()
                             )
 
+
                             if not h_cliente.empty:
 
                                 mostrar_graficos_evolucion(
                                     h_cliente
                                 )
 
+
                                 st.markdown(
-                                    "#### 📋 Registros en Tabla"
+                                    "#### 📋 Registros "
+                                    "en Tabla"
                                 )
 
-                                h_cliente["_fecha_dt"] = (
-                                    pd.to_datetime(
-                                        h_cliente[
-                                            "fecha_evaluacion"
-                                        ],
-                                        format="%d-%m-%Y",
-                                        errors="coerce",
-                                    )
+
+                                h_cliente[
+                                    "_fecha_dt"
+                                ] = pd.to_datetime(
+
+                                    h_cliente[
+                                        "fecha_evaluacion"
+                                    ],
+
+                                    format="%d-%m-%Y",
+
+                                    errors="coerce",
+
                                 )
+
 
                                 h_cliente_ord = (
                                     h_cliente
+
                                     .sort_values(
                                         by="_fecha_dt",
                                         ascending=False,
                                     )
+
                                     .drop(
                                         columns=[
                                             "_fecha_dt"
@@ -1684,17 +2349,23 @@ else:
                                     )
                                 )
 
+
                                 st.dataframe(
-                                    h_cliente_ord.astype(str),
+                                    h_cliente_ord.astype(
+                                        str
+                                    ),
                                     use_container_width=True,
                                 )
+
 
                             else:
 
                                 st.info(
                                     "Este cliente no se ha "
-                                    "tomado medidas corporales todavía."
+                                    "tomado medidas corporales "
+                                    "todavía."
                                 )
+
 
                         else:
 
@@ -1702,6 +2373,7 @@ else:
                                 "No hay registros en el "
                                 "historial general."
                             )
+
 
             else:
 
