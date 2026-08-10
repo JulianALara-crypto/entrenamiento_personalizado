@@ -15,9 +15,7 @@ from PIL import Image
 
 # 🔗 URL DE GOOGLE APPS SCRIPT
 URL_API = (
-    "https://script.google.com/macros/s/"
-    "AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHepWC3iW9JriiQ75laCFCQbs7iaceuH9sVP-XuDo"
-    "/exec"
+    "https://script.google.com/macros/s/AKfycbzE2qSC4oR8zDa1pTyTjQfKFxsTHepWC3iW9JriiQ75laCFCQbs7iaceuH9sVP-XuDo/exec"
 )
 
 
