@@ -14,7 +14,7 @@ from PIL import Image
 # ============================================================
 
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbwMF5jkXXAiw-fDPewAJAm5AOgc78laP0RpGS_W_3i6uvZHvB2raDh9c7eVAq6iOCR2/exec"
+    "https://script.google.com/macros/s/AKfycbwADWNWEu8U5LYHzi5822WuNmOkDKDli8JjG3Xv_KlhlndDIHLT90KhTh1PcEeZs2jc/exec"
 )
 
 
@@ -510,7 +510,7 @@ def cargar_bd():
 
 
         # ====================================================
-        # HISTORIAL
+        # HISTORIAL DE MEDIDAS
         # ====================================================
 
         historial_raw = res.get(
@@ -569,87 +569,99 @@ def cargar_bd():
 
 
         # ====================================================
+        # PAGOS
+        # ====================================================
+
+        pagos_raw = res.get(
+            "pagos",
+            []
+        )
+
+        if len(pagos_raw) > 1:
+
+            columnas_p = [
+                str(c)
+                .strip()
+                .lower()
+                for c in pagos_raw[0]
+            ]
+
+            df_p = pd.DataFrame(
+                pagos_raw[1:],
+                columns=columnas_p
+            )
+
+            df_p = df_p.loc[
+                :,
+                ~df_p.columns.duplicated()
+            ]
+
+        else:
+
+            df_p = pd.DataFrame(
+                columns=[
+                    "id_pago",
+                    "cedula",
+                    "fecha_pago",
+                    "valor",
+                    "concepto",
+                    "valor_mensualidad",
+                ]
+            )
+
+
+        # ====================================================
         # LIMPIAR CÉDULAS
         # ====================================================
 
-        if "cedula" in df_u.columns:
+        for dataframe in (df_u, df_m, df_p):
 
-            df_u["cedula"] = (
-                df_u["cedula"]
-                .astype(str)
-                .str.replace(
-                    r"\.0$",
-                    "",
-                    regex=True
+            if (
+                not dataframe.empty
+                and "cedula" in dataframe.columns
+            ):
+
+                dataframe["cedula"] = (
+                    dataframe["cedula"]
+                    .astype(str)
+                    .str.replace(
+                        r"\.0$",
+                        "",
+                        regex=True
+                    )
+                    .str.strip()
                 )
-                .str.strip()
-            )
-
-
-        if (
-            not df_m.empty
-            and "cedula"
-            in df_m.columns
-        ):
-
-            df_m["cedula"] = (
-                df_m["cedula"]
-                .astype(str)
-                .str.replace(
-                    r"\.0$",
-                    "",
-                    regex=True
-                )
-                .str.strip()
-            )
 
 
         # ====================================================
-        # CONVERTIR COLUMNAS NUMÉRICAS
+        # CONVERTIR COLUMNAS NUMÉRICAS DE MEDIDAS
         # ====================================================
 
-        columnas_numericas = [
+        columnas_numericas_medidas = [
 
             "edad",
-
             "peso_kg",
-
             "estatura_cm",
-
             "cuello_cm",
-
             "hombros_cm",
-
             "bicep_der_cm",
-
             "bicep_izq_cm",
-
             "pecho_cm",
-
             "cintura_cm",
-
             "cadera_cm",
-
             "pierna_der_cm",
-
             "pierna_izq_cm",
-
             "gemelo_der_cm",
-
             "gemelo_izq_cm",
-
             "imc",
-
             "porcentaje_grasa",
-
             "calorias_objetivo",
-
             "edad_metabolica",
 
         ]
 
 
-        for columna in columnas_numericas:
+        for columna in columnas_numericas_medidas:
 
             if columna in df_m.columns:
 
@@ -660,48 +672,63 @@ def cargar_bd():
 
 
         # ====================================================
+        # CONVERTIR COLUMNAS NUMÉRICAS DE PAGOS
+        # ====================================================
+
+        for columna in [
+            "valor",
+            "valor_mensualidad",
+        ]:
+
+            if columna in df_p.columns:
+
+                df_p[columna] = pd.to_numeric(
+                    df_p[columna],
+                    errors="coerce"
+                )
+
+
+        # ====================================================
         # FECHAS
         # ====================================================
 
         if (
             not df_u.empty
-            and "fecha_registro"
-            in df_u.columns
+            and "fecha_registro" in df_u.columns
         ):
 
-            df_u[
-                "fecha_registro"
-            ] = (
-                df_u[
-                    "fecha_registro"
-                ]
-                .apply(
-                    formatear_fecha
-                )
+            df_u["fecha_registro"] = (
+                df_u["fecha_registro"]
+                .apply(formatear_fecha)
             )
 
 
         if (
             not df_m.empty
-            and "fecha_evaluacion"
-            in df_m.columns
+            and "fecha_evaluacion" in df_m.columns
         ):
 
-            df_m[
-                "fecha_evaluacion"
-            ] = (
-                df_m[
-                    "fecha_evaluacion"
-                ]
-                .apply(
-                    formatear_fecha
-                )
+            df_m["fecha_evaluacion"] = (
+                df_m["fecha_evaluacion"]
+                .apply(formatear_fecha)
+            )
+
+
+        if (
+            not df_p.empty
+            and "fecha_pago" in df_p.columns
+        ):
+
+            df_p["fecha_pago"] = (
+                df_p["fecha_pago"]
+                .apply(formatear_fecha)
             )
 
 
         return (
             df_u,
-            df_m
+            df_m,
+            df_p
         )
 
 
@@ -713,6 +740,7 @@ def cargar_bd():
         )
 
         return (
+            pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame()
         )
@@ -1123,7 +1151,7 @@ if not st.session_state[
 
             else:
 
-                df_usuarios, _ = (
+                df_usuarios, _, _ = (
                     cargar_bd()
                 )
 
@@ -1240,7 +1268,7 @@ if not st.session_state[
                 "Crear Perfil"
             ):
 
-                df_usuarios, _ = (
+                df_usuarios, _, _ = (
                     cargar_bd()
                 )
 
@@ -1376,7 +1404,7 @@ else:
         st.rerun()
 
 
-    df_usuarios, df_historial = (
+    df_usuarios, df_historial, df_pagos = (
         cargar_bd()
     )
 
@@ -2286,6 +2314,348 @@ else:
                             f"Seguimiento por WhatsApp]"
                             f"({ws_url})"
                         )
+
+
+                        # ====================================================
+                        # PAGOS Y MENSUALIDAD
+                        # ====================================================
+
+                        st.markdown("---")
+                        st.markdown("#### 💳 Pagos y Mensualidad")
+
+                        pagos_cliente = pd.DataFrame()
+
+                        if (
+                            not df_pagos.empty
+                            and "cedula" in df_pagos.columns
+                        ):
+                            pagos_cliente = df_pagos[
+                                df_pagos["cedula"] == id_cliente
+                            ].copy()
+
+                        total_pagado = 0.0
+                        valor_mensualidad_actual = 0.0
+
+                        if not pagos_cliente.empty:
+
+                            if "valor" in pagos_cliente.columns:
+                                total_pagado = pd.to_numeric(
+                                    pagos_cliente["valor"],
+                                    errors="coerce"
+                                ).fillna(0).sum()
+
+                            if "valor_mensualidad" in pagos_cliente.columns:
+                                mensualidades_validas = pd.to_numeric(
+                                    pagos_cliente["valor_mensualidad"],
+                                    errors="coerce"
+                                ).dropna()
+
+                                if not mensualidades_validas.empty:
+                                    valor_mensualidad_actual = float(
+                                        mensualidades_validas.iloc[-1]
+                                    )
+
+                        saldo_actual = max(
+                            valor_mensualidad_actual - total_pagado,
+                            0.0
+                        )
+
+                        estado_pago = (
+                            "🟢 PAGADO"
+                            if valor_mensualidad_actual > 0
+                            and saldo_actual <= 0
+                            else "🟡 ABONO"
+                            if total_pagado > 0
+                            else "🔴 PENDIENTE"
+                        )
+
+                        p1, p2, p3, p4 = st.columns(4)
+
+                        p1.metric(
+                            "Mensualidad",
+                            f"${valor_mensualidad_actual:,.0f}"
+                        )
+
+                        p2.metric(
+                            "Total Pagado",
+                            f"${total_pagado:,.0f}"
+                        )
+
+                        p3.metric(
+                            "Saldo Pendiente",
+                            f"${saldo_actual:,.0f}"
+                        )
+
+                        p4.metric(
+                            "Estado",
+                            estado_pago
+                        )
+
+                        # ----------------------------------------------------
+                        # REGISTRAR NUEVO PAGO
+                        # ----------------------------------------------------
+
+                        with st.expander(
+                            "➕ Registrar nuevo pago / abono",
+                            expanded=pagos_cliente.empty
+                        ):
+
+                            with st.form(
+                                f"form_pago_{id_cliente}"
+                            ):
+
+                                if valor_mensualidad_actual > 0:
+                                    mensualidad_default = float(
+                                        valor_mensualidad_actual
+                                    )
+                                else:
+                                    mensualidad_default = 250000.0
+
+                                valor_mensualidad = st.number_input(
+                                    "Valor de la mensualidad ($):",
+                                    min_value=1.0,
+                                    value=mensualidad_default,
+                                    step=5000.0,
+                                    format="%.0f",
+                                )
+
+                                saldo_para_nuevo_pago = max(
+                                    float(valor_mensualidad)
+                                    - total_pagado,
+                                    0.0
+                                )
+
+                                if total_pagado > 0:
+                                    st.caption(
+                                        "Pagado hasta ahora: "
+                                        f"${total_pagado:,.0f} | "
+                                        "Saldo según esta mensualidad: "
+                                        f"${saldo_para_nuevo_pago:,.0f}"
+                                    )
+
+                                valor_pago = st.number_input(
+                                    "Valor del pago / abono ($):",
+                                    min_value=1.0,
+                                    value=(
+                                        saldo_para_nuevo_pago
+                                        if saldo_para_nuevo_pago > 0
+                                        else 1.0
+                                    ),
+                                    step=5000.0,
+                                    format="%.0f",
+                                )
+
+                                concepto_pago = st.text_input(
+                                    "Concepto:",
+                                    value="Abono mensualidad"
+                                ).strip()
+
+                                guardar_pago = st.form_submit_button(
+                                    "💾 Registrar Pago",
+                                    use_container_width=True
+                                )
+
+                                if guardar_pago:
+
+                                    try:
+
+                                        valor_mensualidad = float(
+                                            valor_mensualidad
+                                        )
+
+                                        valor_pago = float(
+                                            valor_pago
+                                        )
+
+                                        if valor_mensualidad <= 0:
+                                            st.error(
+                                                "❌ La mensualidad debe ser mayor que cero."
+                                            )
+                                            st.stop()
+
+                                        if valor_pago <= 0:
+                                            st.error(
+                                                "❌ El valor del pago debe ser mayor que cero."
+                                            )
+                                            st.stop()
+
+                                        if not concepto_pago:
+                                            concepto_pago = "Abono mensualidad"
+
+                                        nuevo_total = (
+                                            total_pagado
+                                            + valor_pago
+                                        )
+
+                                        if nuevo_total > valor_mensualidad + 0.001:
+                                            st.error(
+                                                "❌ El abono supera el saldo pendiente. "
+                                                f"Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
+                                            )
+                                            st.stop()
+
+                                        id_pago = (
+                                            f"{id_cliente}_"
+                                            f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                        )
+
+                                        fecha_pago = datetime.today().strftime(
+                                            "%d-%m-%Y"
+                                        )
+
+                                        fila_pago = [
+                                            str(id_pago),
+                                            str(id_cliente),
+                                            str(fecha_pago),
+                                            float(valor_pago),
+                                            str(concepto_pago),
+                                            float(valor_mensualidad),
+                                        ]
+
+                                        respuesta_pago = requests.post(
+                                            URL_API,
+                                            json={
+                                                "action": "guardar_pago",
+                                                "row": fila_pago,
+                                            },
+                                            timeout=30,
+                                        )
+
+                                        respuesta_pago.raise_for_status()
+
+                                        try:
+                                            resultado_pago = respuesta_pago.json()
+                                        except Exception:
+                                            resultado_pago = {}
+
+                                        if (
+                                            resultado_pago.get("status")
+                                            == "error"
+                                        ):
+                                            st.error(
+                                                "❌ Google Apps Script reportó un error: "
+                                                + str(
+                                                    resultado_pago.get(
+                                                        "message",
+                                                        "Error desconocido"
+                                                    )
+                                                )
+                                            )
+                                            st.stop()
+
+                                        st.cache_data.clear()
+
+                                        nuevo_saldo = max(
+                                            valor_mensualidad
+                                            - nuevo_total,
+                                            0.0
+                                        )
+
+                                        if nuevo_saldo <= 0.001:
+                                            st.success(
+                                                "✅ Pago registrado. "
+                                                "La mensualidad quedó completamente pagada."
+                                            )
+                                        else:
+                                            st.success(
+                                                "✅ Abono registrado correctamente. "
+                                                f"Saldo pendiente: ${nuevo_saldo:,.0f}."
+                                            )
+
+                                        st.rerun()
+
+                                    except Exception as e:
+
+                                        st.error(
+                                            "❌ Error registrando el pago: "
+                                            f"{e}"
+                                        )
+
+                        # ----------------------------------------------------
+                        # HISTORIAL DE PAGOS
+                        # ----------------------------------------------------
+
+                        if not pagos_cliente.empty:
+
+                            st.markdown("#### 📜 Historial de Pagos")
+
+                            pagos_mostrar = pagos_cliente.copy()
+
+                            if "fecha_pago" in pagos_mostrar.columns:
+                                pagos_mostrar["_fecha_dt"] = pd.to_datetime(
+                                    pagos_mostrar["fecha_pago"],
+                                    format="%d-%m-%Y",
+                                    errors="coerce"
+                                )
+
+                                pagos_mostrar = (
+                                    pagos_mostrar
+                                    .sort_values(
+                                        by="_fecha_dt",
+                                        ascending=False
+                                    )
+                                    .drop(columns=["_fecha_dt"])
+                                )
+
+                            columnas_pago_mostrar = [
+                                columna
+                                for columna in [
+                                    "fecha_pago",
+                                    "valor",
+                                    "concepto",
+                                    "valor_mensualidad",
+                                ]
+                                if columna in pagos_mostrar.columns
+                            ]
+
+                            tabla_pagos = pagos_mostrar[
+                                columnas_pago_mostrar
+                            ].copy()
+
+                            if "valor" in tabla_pagos.columns:
+                                tabla_pagos["valor"] = (
+                                    pd.to_numeric(
+                                        tabla_pagos["valor"],
+                                        errors="coerce"
+                                    )
+                                    .fillna(0)
+                                    .map(
+                                        lambda x: f"${x:,.0f}"
+                                    )
+                                )
+
+                            if "valor_mensualidad" in tabla_pagos.columns:
+                                tabla_pagos["valor_mensualidad"] = (
+                                    pd.to_numeric(
+                                        tabla_pagos["valor_mensualidad"],
+                                        errors="coerce"
+                                    )
+                                    .fillna(0)
+                                    .map(
+                                        lambda x: f"${x:,.0f}"
+                                    )
+                                )
+
+                            tabla_pagos = tabla_pagos.rename(
+                                columns={
+                                    "fecha_pago": "Fecha",
+                                    "valor": "Pago",
+                                    "concepto": "Concepto",
+                                    "valor_mensualidad": "Mensualidad",
+                                }
+                            )
+
+                            st.dataframe(
+                                tabla_pagos,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                        else:
+
+                            st.info(
+                                "Este cliente todavía no tiene pagos registrados."
+                            )
 
 
                         st.markdown(
