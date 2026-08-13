@@ -2409,7 +2409,7 @@ else:
                                         valor_mensualidad_actual
                                     )
                                 else:
-                                    mensualidad_default = 250000.0
+                                    mensualidad_default = 350000.0
 
                                 valor_mensualidad = st.number_input(
                                     "Valor de la mensualidad ($):",
