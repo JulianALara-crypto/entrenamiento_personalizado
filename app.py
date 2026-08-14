@@ -14,7 +14,7 @@ from PIL import Image
 # ============================================================
 
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbwADWNWEu8U5LYHzi5822WuNmOkDKDli8JjG3Xv_KlhlndDIHLT90KhTh1PcEeZs2jc/exec"
+    "https://script.google.com/macros/s/AKfycbwMF5jkXXAiw-fDPewAJAm5AOgc78laP0RpGS_W_3i6uvZHvB2raDh9c7eVAq6iOCR2/exec"
 )
 
 
@@ -2409,7 +2409,7 @@ else:
                                         valor_mensualidad_actual
                                     )
                                 else:
-                                    mensualidad_default = 350000.0
+                                    mensualidad_default = 250000.0
 
                                 valor_mensualidad = st.number_input(
                                     "Valor de la mensualidad ($):",
