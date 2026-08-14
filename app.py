@@ -450,7 +450,7 @@ def link_whatsapp(
 # CARGAR BASE DE DATOS
 # ============================================================
 
-@st.cache_data(ttl=2)
+@st.cache_data(ttl=600, show_spinner=False)
 def cargar_bd():
 
     try:
@@ -1349,7 +1349,7 @@ if not st.session_state[
 
                         respuesta_registro.raise_for_status()
 
-                        st.cache_data.clear()
+                        cargar_bd.clear()
 
                         st.success(
                             "¡Perfil creado con éxito! "
@@ -1878,7 +1878,7 @@ else:
                             st.stop()
 
 
-                        st.cache_data.clear()
+                        cargar_bd.clear()
 
 
                         st.success(
@@ -2329,9 +2329,32 @@ else:
                             not df_pagos.empty
                             and "cedula" in df_pagos.columns
                         ):
+                            # Normalizar cédulas: Google Sheets puede
+                            # devolverlas como entero, decimal o texto.
+                            def normalizar_cedula(valor):
+                                if pd.isna(valor):
+                                    return ""
+                                texto = str(valor).strip()
+                                if texto.endswith(".0"):
+                                    texto = texto[:-2]
+                                return texto
+
+                            cedula_cliente = normalizar_cedula(id_cliente)
+
+                            df_pagos = df_pagos.copy()
+                            df_pagos["cedula_normalizada"] = (
+                                df_pagos["cedula"].apply(normalizar_cedula)
+                            )
+
                             pagos_cliente = df_pagos[
-                                df_pagos["cedula"] == id_cliente
+                                df_pagos["cedula_normalizada"] == cedula_cliente
                             ].copy()
+
+                            pagos_cliente.drop(
+                                columns=["cedula_normalizada"],
+                                errors="ignore",
+                                inplace=True
+                            )
 
                         total_pagado = 0.0
                         valor_mensualidad_actual = 0.0
@@ -2543,7 +2566,7 @@ else:
                                             )
                                             st.stop()
 
-                                        st.cache_data.clear()
+                                        cargar_bd.clear()
 
                                         nuevo_saldo = max(
                                             valor_mensualidad
