@@ -1,7 +1,7 @@
 import math
 import os
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 import requests
@@ -14,7 +14,7 @@ from PIL import Image
 # ============================================================
 
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbxm2jmT2cbuiVbcwix0wnveSCVBEcHH-V4ZH825w1FzXNjLoKRCncsRC8UxY-oGQMVw/exec"
+    "https://script.google.com/macros/s/AKfycbzbIdzHiprR5IrJu1p5IcdZfQzve4cc-XjDogfQMi-CNzP9ZeQCiYXJWD2VWiKX17Fq/exec"
 )
 
 
@@ -85,6 +85,14 @@ st.markdown(
 
         div[data-testid="stDecoration"] {
             display: none;
+        }
+
+        .clase-card {
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333333;
+            background-color: #111111;
+            margin-bottom: 15px;
         }
 
     </style>
@@ -158,10 +166,6 @@ def calcular_metricas(
     meta,
 ):
 
-    # --------------------------------------------------------
-    # CONVERSIÓN EXPLÍCITA A FLOAT
-    # --------------------------------------------------------
-
     peso = float(peso)
 
     estatura_cm = float(
@@ -177,15 +181,12 @@ def calcular_metricas(
     cadera = float(cadera)
 
 
-    # --------------------------------------------------------
-    # VALIDACIÓN
-    # --------------------------------------------------------
-
     if peso <= 0:
 
         raise ValueError(
             "El peso debe ser mayor que cero."
         )
+
 
     if estatura_cm <= 0:
 
@@ -311,7 +312,7 @@ def calcular_metricas(
 
 
     # --------------------------------------------------------
-    # CALORÍAS DE MANTENIMIENTO
+    # MANTENIMIENTO
     # --------------------------------------------------------
 
     mantenimiento = (
@@ -371,10 +372,6 @@ def calcular_metricas(
         )
     )
 
-
-    # --------------------------------------------------------
-    # CONVERSIÓN FINAL EXPLÍCITA
-    # --------------------------------------------------------
 
     imc = float(
         round(imc, 2)
@@ -447,10 +444,27 @@ def link_whatsapp(
 
 
 # ============================================================
+# NORMALIZAR CÉDULA
+# ============================================================
+
+def normalizar_cedula(valor):
+
+    if pd.isna(valor):
+
+        return ""
+
+    return (
+        str(valor)
+        .replace(".0", "")
+        .strip()
+    )
+
+
+# ============================================================
 # CARGAR BASE DE DATOS
 # ============================================================
 
-@st.cache_data(ttl=2)
+@st.cache_data(ttl=10)
 def cargar_bd():
 
     try:
@@ -611,10 +625,58 @@ def cargar_bd():
 
 
         # ====================================================
+        # CLASES
+        # ====================================================
+
+        clases_raw = res.get(
+            "clases",
+            []
+        )
+
+        if len(clases_raw) > 1:
+
+            columnas_c = [
+                str(c)
+                .strip()
+                .lower()
+                for c in clases_raw[0]
+            ]
+
+            df_c = pd.DataFrame(
+                clases_raw[1:],
+                columns=columnas_c
+            )
+
+            df_c = df_c.loc[
+                :,
+                ~df_c.columns.duplicated()
+            ]
+
+        else:
+
+            df_c = pd.DataFrame(
+                columns=[
+                    "id_clase",
+                    "cedula",
+                    "fecha_clase",
+                    "plan",
+                    "clases_contratadas",
+                    "observacion",
+                    "fecha_registro",
+                ]
+            )
+
+
+        # ====================================================
         # LIMPIAR CÉDULAS
         # ====================================================
 
-        for dataframe in (df_u, df_m, df_p):
+        for dataframe in (
+            df_u,
+            df_m,
+            df_p,
+            df_c
+        ):
 
             if (
                 not dataframe.empty
@@ -623,18 +685,14 @@ def cargar_bd():
 
                 dataframe["cedula"] = (
                     dataframe["cedula"]
-                    .astype(str)
-                    .str.replace(
-                        r"\.0$",
-                        "",
-                        regex=True
+                    .apply(
+                        normalizar_cedula
                     )
-                    .str.strip()
                 )
 
 
         # ====================================================
-        # CONVERTIR COLUMNAS NUMÉRICAS DE MEDIDAS
+        # NUMÉRICOS DE MEDIDAS
         # ====================================================
 
         columnas_numericas_medidas = [
@@ -672,7 +730,7 @@ def cargar_bd():
 
 
         # ====================================================
-        # CONVERTIR COLUMNAS NUMÉRICAS DE PAGOS
+        # NUMÉRICOS DE PAGOS
         # ====================================================
 
         for columna in [
@@ -689,6 +747,25 @@ def cargar_bd():
 
 
         # ====================================================
+        # NUMÉRICOS DE CLASES
+        # ====================================================
+
+        if (
+            not df_c.empty
+            and "clases_contratadas" in df_c.columns
+        ):
+
+            df_c[
+                "clases_contratadas"
+            ] = pd.to_numeric(
+                df_c[
+                    "clases_contratadas"
+                ],
+                errors="coerce"
+            )
+
+
+        # ====================================================
         # FECHAS
         # ====================================================
 
@@ -697,8 +774,12 @@ def cargar_bd():
             and "fecha_registro" in df_u.columns
         ):
 
-            df_u["fecha_registro"] = (
-                df_u["fecha_registro"]
+            df_u[
+                "fecha_registro"
+            ] = (
+                df_u[
+                    "fecha_registro"
+                ]
                 .apply(formatear_fecha)
             )
 
@@ -708,8 +789,12 @@ def cargar_bd():
             and "fecha_evaluacion" in df_m.columns
         ):
 
-            df_m["fecha_evaluacion"] = (
-                df_m["fecha_evaluacion"]
+            df_m[
+                "fecha_evaluacion"
+            ] = (
+                df_m[
+                    "fecha_evaluacion"
+                ]
                 .apply(formatear_fecha)
             )
 
@@ -719,8 +804,42 @@ def cargar_bd():
             and "fecha_pago" in df_p.columns
         ):
 
-            df_p["fecha_pago"] = (
-                df_p["fecha_pago"]
+            df_p[
+                "fecha_pago"
+            ] = (
+                df_p[
+                    "fecha_pago"
+                ]
+                .apply(formatear_fecha)
+            )
+
+
+        if (
+            not df_c.empty
+            and "fecha_clase" in df_c.columns
+        ):
+
+            df_c[
+                "fecha_clase"
+            ] = (
+                df_c[
+                    "fecha_clase"
+                ]
+                .apply(formatear_fecha)
+            )
+
+
+        if (
+            not df_c.empty
+            and "fecha_registro" in df_c.columns
+        ):
+
+            df_c[
+                "fecha_registro"
+            ] = (
+                df_c[
+                    "fecha_registro"
+                ]
                 .apply(formatear_fecha)
             )
 
@@ -728,7 +847,8 @@ def cargar_bd():
         return (
             df_u,
             df_m,
-            df_p
+            df_p,
+            df_c
         )
 
 
@@ -740,6 +860,7 @@ def cargar_bd():
         )
 
         return (
+            pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame()
@@ -767,17 +888,11 @@ def mostrar_graficos_evolucion(
     columnas_num = [
 
         "peso_kg",
-
         "porcentaje_grasa",
-
         "cintura_cm",
-
         "pecho_cm",
-
         "cadera_cm",
-
         "bicep_der_cm",
-
         "bicep_izq_cm",
 
     ]
@@ -1056,6 +1171,280 @@ def mostrar_graficos_evolucion(
 
 
 # ============================================================
+# RESUMEN DE CLASES
+# ============================================================
+
+def obtener_resumen_clases(
+    df_clases,
+    cedula
+):
+
+    resultado = {
+
+        "plan": "Sin plan registrado",
+
+        "clases_contratadas": 0,
+
+        "clases_tomadas": 0,
+
+        "clases_restantes": 0,
+
+        "porcentaje": 0.0,
+
+        "registros": pd.DataFrame(),
+
+    }
+
+
+    if (
+        df_clases.empty
+        or "cedula" not in df_clases.columns
+    ):
+
+        return resultado
+
+
+    cedula = normalizar_cedula(
+        cedula
+    )
+
+
+    registros = df_clases[
+        df_clases["cedula"]
+        == cedula
+    ].copy()
+
+
+    if registros.empty:
+
+        return resultado
+
+
+    # --------------------------------------------------------
+    # CLASES TOMADAS
+    # --------------------------------------------------------
+
+    if "fecha_clase" in registros.columns:
+
+        registros = registros[
+            registros[
+                "fecha_clase"
+            ]
+            .astype(str)
+            .str.strip()
+            != ""
+        ]
+
+
+    resultado[
+        "clases_tomadas"
+    ] = len(
+        registros
+    )
+
+
+    # --------------------------------------------------------
+    # PLAN ACTUAL
+    # --------------------------------------------------------
+
+    if "plan" in registros.columns:
+
+        planes = (
+            registros[
+                "plan"
+            ]
+            .astype(str)
+            .str.strip()
+        )
+
+        planes_validos = planes[
+            planes != ""
+        ]
+
+        if not planes_validos.empty:
+
+            resultado[
+                "plan"
+            ] = planes_validos.iloc[-1]
+
+
+    # --------------------------------------------------------
+    # TOTAL CONTRATADO
+    # --------------------------------------------------------
+
+    if (
+        "clases_contratadas"
+        in registros.columns
+    ):
+
+        cantidades = pd.to_numeric(
+            registros[
+                "clases_contratadas"
+            ],
+            errors="coerce"
+        ).dropna()
+
+        if not cantidades.empty:
+
+            resultado[
+                "clases_contratadas"
+            ] = int(
+                cantidades.iloc[-1]
+            )
+
+
+    # --------------------------------------------------------
+    # RESTANTES
+    # --------------------------------------------------------
+
+    resultado[
+        "clases_restantes"
+    ] = max(
+        resultado[
+            "clases_contratadas"
+        ]
+        -
+        resultado[
+            "clases_tomadas"
+        ],
+        0
+    )
+
+
+    # --------------------------------------------------------
+    # PORCENTAJE
+    # --------------------------------------------------------
+
+    if (
+        resultado[
+            "clases_contratadas"
+        ]
+        > 0
+    ):
+
+        resultado[
+            "porcentaje"
+        ] = min(
+            (
+                resultado[
+                    "clases_tomadas"
+                ]
+                /
+                resultado[
+                    "clases_contratadas"
+                ]
+            )
+            * 100,
+            100
+        )
+
+
+    resultado[
+        "registros"
+    ] = registros
+
+
+    return resultado
+
+
+# ============================================================
+# MOSTRAR RESUMEN DE CLASES
+# ============================================================
+
+def mostrar_resumen_clases(
+    df_clases,
+    cedula,
+    titulo="🏋️ Clases Personalizadas"
+):
+
+    resumen = obtener_resumen_clases(
+        df_clases,
+        cedula
+    )
+
+
+    st.markdown(
+        f"### {titulo}"
+    )
+
+
+    if (
+        resumen[
+            "clases_contratadas"
+        ]
+        <= 0
+    ):
+
+        st.info(
+            "Este cliente todavía no tiene "
+            "un plan de clases configurado."
+        )
+
+        return
+
+
+    c1, c2, c3, c4 = st.columns(4)
+
+
+    c1.metric(
+        "Plan",
+        resumen["plan"]
+    )
+
+
+    c2.metric(
+        "Clases contratadas",
+        resumen[
+            "clases_contratadas"
+        ]
+    )
+
+
+    c3.metric(
+        "Clases tomadas",
+        resumen[
+            "clases_tomadas"
+        ]
+    )
+
+
+    c4.metric(
+        "Clases restantes",
+        resumen[
+            "clases_restantes"
+        ]
+    )
+
+
+    st.progress(
+        int(
+            round(
+                resumen[
+                    "porcentaje"
+                ]
+            )
+        )
+    )
+
+
+    st.markdown(
+        f"""
+        <div style="
+            text-align:center;
+            font-size:18px;
+            margin-top:-10px;
+            margin-bottom:15px;
+        ">
+            <strong>
+                {resumen['porcentaje']:.1f}% del plan utilizado
+            </strong>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
 # ESTADO DE SESIÓN
 # ============================================================
 
@@ -1151,7 +1540,7 @@ if not st.session_state[
 
             else:
 
-                df_usuarios, _, _ = (
+                df_usuarios, _, _, _ = (
                     cargar_bd()
                 )
 
@@ -1268,7 +1657,7 @@ if not st.session_state[
                 "Crear Perfil"
             ):
 
-                df_usuarios, _, _ = (
+                df_usuarios, _, _, _ = (
                     cargar_bd()
                 )
 
@@ -1404,9 +1793,12 @@ else:
         st.rerun()
 
 
-    df_usuarios, df_historial, df_pagos = (
-        cargar_bd()
-    )
+    (
+        df_usuarios,
+        df_historial,
+        df_pagos,
+        df_clases
+    ) = cargar_bd()
 
 
     # ========================================================
@@ -1423,6 +1815,7 @@ else:
             [
                 "📏 Registrar Medidas Hoy",
                 "📊 Ver Mi Progreso",
+                "🏋️ Mis Clases",
             ],
         )
 
@@ -1624,27 +2017,16 @@ else:
                         ) = calcular_metricas(
 
                             peso,
-
                             estatura,
-
                             edad,
-
                             sexo,
-
                             cuello,
-
                             cintura,
-
                             cadera,
-
                             meta,
 
                         )
 
-
-                        # ==================================
-                        # VALIDACIÓN DEL IMC
-                        # ==================================
 
                         if (
                             imc < 10
@@ -1661,10 +2043,6 @@ else:
                             st.stop()
 
 
-                        # ==================================
-                        # ID Y FECHA
-                        # ==================================
-
                         id_reg = (
                             f"{st.session_state['cedula']}_"
                             f"{datetime.today().strftime('%Y%m%d%H%M')}"
@@ -1679,24 +2057,11 @@ else:
                         )
 
 
-                        # ==================================
-                        # FILA FINAL
-                        #
-                        # MUY IMPORTANTE:
-                        # IMC, GRASA, CALORÍAS Y EDAD
-                        # SON CONVERTIDOS EXPLÍCITAMENTE
-                        # A TIPOS NUMÉRICOS.
-                        # ==================================
-
                         fila_medidas = [
 
-                            str(
-                                id_reg
-                            ),
+                            str(id_reg),
 
-                            str(
-                                fecha_hoy
-                            ),
+                            str(fecha_hoy),
 
                             str(
                                 st.session_state[
@@ -1704,123 +2069,48 @@ else:
                                 ]
                             ),
 
-                            int(
-                                edad
-                            ),
+                            int(edad),
 
-                            str(
-                                sexo
-                            ),
+                            str(sexo),
 
-                            str(
-                                meta
-                            ),
+                            str(meta),
 
-                            float(
-                                peso
-                            ),
+                            float(peso),
 
-                            float(
-                                estatura
-                            ),
+                            float(estatura),
 
-                            float(
-                                cuello
-                            ),
+                            float(cuello),
 
-                            float(
-                                hombros
-                            ),
+                            float(hombros),
 
-                            float(
-                                bicep_der
-                            ),
+                            float(bicep_der),
 
-                            float(
-                                bicep_izq
-                            ),
+                            float(bicep_izq),
 
-                            float(
-                                pecho
-                            ),
+                            float(pecho),
 
-                            float(
-                                cintura
-                            ),
+                            float(cintura),
 
-                            float(
-                                cadera
-                            ),
+                            float(cadera),
 
-                            float(
-                                pierna_der
-                            ),
+                            float(pierna_der),
 
-                            float(
-                                pierna_izq
-                            ),
+                            float(pierna_izq),
 
-                            float(
-                                gemelo_der
-                            ),
+                            float(gemelo_der),
 
-                            float(
-                                gemelo_izq
-                            ),
+                            float(gemelo_izq),
 
-                            float(
-                                imc
-                            ),
+                            float(imc),
 
-                            float(
-                                grasa
-                            ),
+                            float(grasa),
 
-                            int(
-                                cals
-                            ),
+                            int(cals),
 
-                            int(
-                                edad_bio
-                            ),
+                            int(edad_bio),
 
                         ]
 
-
-                        # ==================================
-                        # DEBUG TEMPORAL
-                        # ==================================
-
-                        st.write(
-                            "### 🔎 Valores calculados"
-                        )
-
-                        st.write(
-                            {
-                                "Peso":
-                                peso,
-
-                                "Estatura":
-                                estatura,
-
-                                "IMC":
-                                imc,
-
-                                "% Grasa":
-                                grasa,
-
-                                "Calorías":
-                                cals,
-
-                                "Edad metabólica":
-                                edad_bio,
-                            }
-                        )
-
-
-                        # ==================================
-                        # ENVIAR A GOOGLE APPS SCRIPT
-                        # ==================================
 
                         respuesta_medidas = (
                             requests.post(
@@ -1843,8 +2133,6 @@ else:
 
                         respuesta_medidas.raise_for_status()
 
-
-                        # Intentar leer respuesta del API
 
                         try:
 
@@ -1885,10 +2173,6 @@ else:
                             "¡Medidas guardadas con éxito!"
                         )
 
-
-                        # ==================================
-                        # MOSTRAR RESULTADOS
-                        # ==================================
 
                         r1, r2, r3, r4 = (
                             st.columns(4)
@@ -2177,6 +2461,133 @@ else:
                 )
 
 
+        # ====================================================
+        # MIS CLASES
+        # ====================================================
+
+        elif (
+            opcion
+            == "🏋️ Mis Clases"
+        ):
+
+            st.subheader(
+                "🏋️ Mi Plan de Clases Personalizadas"
+            )
+
+
+            mostrar_resumen_clases(
+                df_clases,
+                st.session_state[
+                    "cedula"
+                ]
+            )
+
+
+            resumen_clases = (
+                obtener_resumen_clases(
+                    df_clases,
+                    st.session_state[
+                        "cedula"
+                    ]
+                )
+            )
+
+
+            registros_clases = (
+                resumen_clases[
+                    "registros"
+                ]
+            )
+
+
+            if not registros_clases.empty:
+
+                st.markdown(
+                    "#### 📅 Clases tomadas"
+                )
+
+
+                tabla = registros_clases.copy()
+
+
+                columnas_tabla = [
+
+                    columna
+
+                    for columna in [
+
+                        "fecha_clase",
+                        "plan",
+                        "clases_contratadas",
+                        "observacion",
+
+                    ]
+
+                    if columna in tabla.columns
+
+                ]
+
+
+                tabla = tabla[
+                    columnas_tabla
+                ]
+
+
+                tabla = tabla.rename(
+                    columns={
+                        "fecha_clase":
+                            "Fecha de Clase",
+
+                        "plan":
+                            "Plan",
+
+                        "clases_contratadas":
+                            "Clases Contratadas",
+
+                        "observacion":
+                            "Observación",
+                    }
+                )
+
+
+                if "Fecha de Clase" in tabla.columns:
+
+                    tabla["_fecha"] = pd.to_datetime(
+                        tabla[
+                            "Fecha de Clase"
+                        ],
+                        format="%d-%m-%Y",
+                        errors="coerce"
+                    )
+
+                    tabla = (
+                        tabla
+                        .sort_values(
+                            "_fecha",
+                            ascending=False
+                        )
+                        .drop(
+                            columns=[
+                                "_fecha"
+                            ]
+                        )
+                    )
+
+
+                st.dataframe(
+                    tabla.astype(str),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+
+            else:
+
+                st.info(
+                    "Todavía no tienes clases registradas."
+                )
+
+
     # ========================================================
     # ADMINISTRADOR
     # ========================================================
@@ -2213,10 +2624,902 @@ else:
 
             if not clientes.empty:
 
-                cedula_sel = (
-                    st.selectbox(
-                        "Buscar Cliente "
-                        "por Nombre/Cédula:",
+                # ====================================================
+                # MENÚ ADMINISTRADOR
+                # ====================================================
+
+                opcion_admin = st.sidebar.radio(
+                    "MENÚ ADMINISTRADOR",
+                    [
+                        "👤 Gestión de Clientes",
+                        "🏋️ Control de Clases",
+                    ],
+                )
+
+
+                # ====================================================
+                # GESTIÓN DE CLIENTES
+                # ====================================================
+
+                if (
+                    opcion_admin
+                    == "👤 Gestión de Clientes"
+                ):
+
+                    cedula_sel = (
+                        st.selectbox(
+                            "Buscar Cliente "
+                            "por Nombre/Cédula:",
+                            clientes[
+                                "cedula"
+                            ].astype(str)
+                            + " - "
+                            + clientes[
+                                "nombre_completo"
+                            ].astype(str),
+                        )
+                    )
+
+
+                    if cedula_sel:
+
+                        id_cliente = (
+                            str(
+                                cedula_sel
+                                .split(" - ")[0]
+                            )
+                            .strip()
+                        )
+
+
+                        cliente_encontrado = (
+                            clientes[
+                                clientes[
+                                    "cedula"
+                                ]
+                                == id_cliente
+                            ]
+                        )
+
+
+                        if not cliente_encontrado.empty:
+
+                            u_info = (
+                                cliente_encontrado
+                                .iloc[0]
+                            )
+
+
+                            st.markdown(
+                                "---"
+                            )
+
+
+                            st.markdown(
+                                f"### 📋 Información de: "
+                                f"{u_info['nombre_completo']}"
+                            )
+
+
+                            info_col1, info_col2, info_col3 = (
+                                st.columns(3)
+                            )
+
+
+                            info_col1.markdown(
+                                "WhatsApp: "
+                                f"{u_info.get('whatsapp', 'No registra')}"
+                            )
+
+
+                            info_col2.markdown(
+                                "EPS: "
+                                f"{str(u_info.get('eps', 'No registra')).upper()}"
+                            )
+
+
+                            info_col3.markdown(
+                                "Fecha Registro: "
+                                f"{u_info.get('fecha_registro', 'No registra')}"
+                            )
+
+
+                            st.markdown(
+                                "Condiciones Médicas / "
+                                "Lesiones: "
+                                f"{u_info.get('condiciones_medicas', 'Ninguna')}"
+                            )
+
+
+                            ws_url = link_whatsapp(
+                                u_info.get(
+                                    "whatsapp",
+                                    ""
+                                ),
+                                u_info[
+                                    "nombre_completo"
+                                ],
+                            )
+
+
+                            st.markdown(
+                                f"[💬 Enviar Mensaje de "
+                                f"Seguimiento por WhatsApp]"
+                                f"({ws_url})"
+                            )
+
+
+                            # ====================================================
+                            # RESUMEN DE CLASES EN PERFIL
+                            # ====================================================
+
+                            st.markdown(
+                                "---"
+                            )
+
+
+                            mostrar_resumen_clases(
+                                df_clases,
+                                id_cliente,
+                                "🏋️ Resumen de Clases"
+                            )
+
+
+                            # ====================================================
+                            # PAGOS Y MENSUALIDAD
+                            # ====================================================
+
+                            st.markdown(
+                                "---"
+                            )
+
+                            st.markdown(
+                                "#### 💳 Pagos y Mensualidad"
+                            )
+
+
+                            pagos_cliente = pd.DataFrame()
+
+
+                            if (
+                                not df_pagos.empty
+                                and "cedula"
+                                in df_pagos.columns
+                            ):
+
+                                pagos_cliente = df_pagos[
+                                    df_pagos[
+                                        "cedula"
+                                    ]
+                                    == id_cliente
+                                ].copy()
+
+
+                            total_pagado = 0.0
+
+                            valor_mensualidad_actual = 0.0
+
+
+                            if not pagos_cliente.empty:
+
+                                if (
+                                    "valor"
+                                    in pagos_cliente.columns
+                                ):
+
+                                    total_pagado = (
+                                        pd.to_numeric(
+                                            pagos_cliente[
+                                                "valor"
+                                            ],
+                                            errors="coerce"
+                                        )
+                                        .fillna(0)
+                                        .sum()
+                                    )
+
+
+                                if (
+                                    "valor_mensualidad"
+                                    in pagos_cliente.columns
+                                ):
+
+                                    mensualidades_validas = (
+                                        pd.to_numeric(
+                                            pagos_cliente[
+                                                "valor_mensualidad"
+                                            ],
+                                            errors="coerce"
+                                        )
+                                        .dropna()
+                                    )
+
+
+                                    if (
+                                        not mensualidades_validas.empty
+                                    ):
+
+                                        valor_mensualidad_actual = float(
+                                            mensualidades_validas.iloc[-1]
+                                        )
+
+
+                            saldo_actual = max(
+                                valor_mensualidad_actual
+                                - total_pagado,
+                                0.0
+                            )
+
+
+                            estado_pago = (
+
+                                "🟢 PAGADO"
+
+                                if valor_mensualidad_actual > 0
+                                and saldo_actual <= 0
+
+                                else "🟡 ABONO"
+
+                                if total_pagado > 0
+
+                                else "🔴 PENDIENTE"
+
+                            )
+
+
+                            p1, p2, p3, p4 = (
+                                st.columns(4)
+                            )
+
+
+                            p1.metric(
+                                "Mensualidad",
+                                f"${valor_mensualidad_actual:,.0f}"
+                            )
+
+
+                            p2.metric(
+                                "Total Pagado",
+                                f"${total_pagado:,.0f}"
+                            )
+
+
+                            p3.metric(
+                                "Saldo Pendiente",
+                                f"${saldo_actual:,.0f}"
+                            )
+
+
+                            p4.metric(
+                                "Estado",
+                                estado_pago
+                            )
+
+
+                            # ====================================================
+                            # REGISTRAR PAGO
+                            # ====================================================
+
+                            with st.expander(
+                                "➕ Registrar nuevo pago / abono",
+                                expanded=pagos_cliente.empty
+                            ):
+
+                                with st.form(
+                                    f"form_pago_{id_cliente}"
+                                ):
+
+                                    if (
+                                        valor_mensualidad_actual > 0
+                                    ):
+
+                                        mensualidad_default = float(
+                                            valor_mensualidad_actual
+                                        )
+
+                                    else:
+
+                                        mensualidad_default = 250000.0
+
+
+                                    valor_mensualidad = st.number_input(
+                                        "Valor de la mensualidad ($):",
+                                        min_value=1.0,
+                                        value=mensualidad_default,
+                                        step=5000.0,
+                                        format="%.0f",
+                                    )
+
+
+                                    saldo_para_nuevo_pago = max(
+                                        float(
+                                            valor_mensualidad
+                                        )
+                                        - total_pagado,
+                                        0.0
+                                    )
+
+
+                                    if total_pagado > 0:
+
+                                        st.caption(
+                                            "Pagado hasta ahora: "
+                                            f"${total_pagado:,.0f} | "
+                                            "Saldo según esta mensualidad: "
+                                            f"${saldo_para_nuevo_pago:,.0f}"
+                                        )
+
+
+                                    valor_pago = st.number_input(
+                                        "Valor del pago / abono ($):",
+                                        min_value=1.0,
+                                        value=(
+                                            saldo_para_nuevo_pago
+                                            if saldo_para_nuevo_pago > 0
+                                            else 1.0
+                                        ),
+                                        step=5000.0,
+                                        format="%.0f",
+                                    )
+
+
+                                    concepto_pago = st.text_input(
+                                        "Concepto:",
+                                        value="Abono mensualidad"
+                                    ).strip()
+
+
+                                    guardar_pago = st.form_submit_button(
+                                        "💾 Registrar Pago",
+                                        use_container_width=True
+                                    )
+
+
+                                    if guardar_pago:
+
+                                        try:
+
+                                            valor_mensualidad = float(
+                                                valor_mensualidad
+                                            )
+
+                                            valor_pago = float(
+                                                valor_pago
+                                            )
+
+
+                                            if valor_mensualidad <= 0:
+
+                                                st.error(
+                                                    "❌ La mensualidad debe "
+                                                    "ser mayor que cero."
+                                                )
+
+                                                st.stop()
+
+
+                                            if valor_pago <= 0:
+
+                                                st.error(
+                                                    "❌ El valor del pago "
+                                                    "debe ser mayor que cero."
+                                                )
+
+                                                st.stop()
+
+
+                                            if not concepto_pago:
+
+                                                concepto_pago = (
+                                                    "Abono mensualidad"
+                                                )
+
+
+                                            nuevo_total = (
+                                                total_pagado
+                                                + valor_pago
+                                            )
+
+
+                                            if (
+                                                nuevo_total
+                                                >
+                                                valor_mensualidad
+                                                + 0.001
+                                            ):
+
+                                                st.error(
+                                                    "❌ El abono supera "
+                                                    "el saldo pendiente. "
+                                                    f"Saldo disponible: "
+                                                    f"${saldo_para_nuevo_pago:,.0f}."
+                                                )
+
+                                                st.stop()
+
+
+                                            id_pago = (
+                                                f"{id_cliente}_"
+                                                f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                            )
+
+
+                                            fecha_pago = (
+                                                datetime.today()
+                                                .strftime(
+                                                    "%d-%m-%Y"
+                                                )
+                                            )
+
+
+                                            fila_pago = [
+
+                                                str(id_pago),
+
+                                                str(id_cliente),
+
+                                                str(fecha_pago),
+
+                                                float(valor_pago),
+
+                                                str(concepto_pago),
+
+                                                float(
+                                                    valor_mensualidad
+                                                ),
+
+                                            ]
+
+
+                                            respuesta_pago = requests.post(
+
+                                                URL_API,
+
+                                                json={
+                                                    "action":
+                                                    "guardar_pago",
+
+                                                    "row":
+                                                    fila_pago,
+                                                },
+
+                                                timeout=30,
+
+                                            )
+
+
+                                            respuesta_pago.raise_for_status()
+
+
+                                            try:
+
+                                                resultado_pago = (
+                                                    respuesta_pago.json()
+                                                )
+
+                                            except Exception:
+
+                                                resultado_pago = {}
+
+
+                                            if (
+                                                resultado_pago.get(
+                                                    "status"
+                                                )
+                                                == "error"
+                                            ):
+
+                                                st.error(
+                                                    "❌ Google Apps Script "
+                                                    "reportó un error: "
+                                                    + str(
+                                                        resultado_pago.get(
+                                                            "message",
+                                                            "Error desconocido"
+                                                        )
+                                                    )
+                                                )
+
+                                                st.stop()
+
+
+                                            st.cache_data.clear()
+
+
+                                            nuevo_saldo = max(
+                                                valor_mensualidad
+                                                - nuevo_total,
+                                                0.0
+                                            )
+
+
+                                            if nuevo_saldo <= 0.001:
+
+                                                st.success(
+                                                    "✅ Pago registrado. "
+                                                    "La mensualidad quedó "
+                                                    "completamente pagada."
+                                                )
+
+                                            else:
+
+                                                st.success(
+                                                    "✅ Abono registrado "
+                                                    "correctamente. "
+                                                    f"Saldo pendiente: "
+                                                    f"${nuevo_saldo:,.0f}."
+                                                )
+
+
+                                            st.rerun()
+
+
+                                        except Exception as e:
+
+                                            st.error(
+                                                "❌ Error registrando "
+                                                f"el pago: {e}"
+                                            )
+
+
+                            # ====================================================
+                            # HISTORIAL DE PAGOS
+                            # ====================================================
+
+                            if not pagos_cliente.empty:
+
+                                st.markdown(
+                                    "#### 📜 Historial de Pagos"
+                                )
+
+
+                                pagos_mostrar = (
+                                    pagos_cliente.copy()
+                                )
+
+
+                                if (
+                                    "fecha_pago"
+                                    in pagos_mostrar.columns
+                                ):
+
+                                    pagos_mostrar[
+                                        "_fecha_dt"
+                                    ] = pd.to_datetime(
+                                        pagos_mostrar[
+                                            "fecha_pago"
+                                        ],
+                                        format="%d-%m-%Y",
+                                        errors="coerce"
+                                    )
+
+
+                                    pagos_mostrar = (
+                                        pagos_mostrar
+                                        .sort_values(
+                                            by="_fecha_dt",
+                                            ascending=False
+                                        )
+                                        .drop(
+                                            columns=[
+                                                "_fecha_dt"
+                                            ]
+                                        )
+                                    )
+
+
+                                columnas_pago_mostrar = [
+
+                                    columna
+
+                                    for columna in [
+
+                                        "fecha_pago",
+                                        "valor",
+                                        "concepto",
+                                        "valor_mensualidad",
+
+                                    ]
+
+                                    if columna
+                                    in pagos_mostrar.columns
+
+                                ]
+
+
+                                tabla_pagos = pagos_mostrar[
+                                    columnas_pago_mostrar
+                                ].copy()
+
+
+                                if (
+                                    "valor"
+                                    in tabla_pagos.columns
+                                ):
+
+                                    tabla_pagos[
+                                        "valor"
+                                    ] = (
+                                        pd.to_numeric(
+                                            tabla_pagos[
+                                                "valor"
+                                            ],
+                                            errors="coerce"
+                                        )
+                                        .fillna(0)
+                                        .map(
+                                            lambda x:
+                                            f"${x:,.0f}"
+                                        )
+                                    )
+
+
+                                if (
+                                    "valor_mensualidad"
+                                    in tabla_pagos.columns
+                                ):
+
+                                    tabla_pagos[
+                                        "valor_mensualidad"
+                                    ] = (
+                                        pd.to_numeric(
+                                            tabla_pagos[
+                                                "valor_mensualidad"
+                                            ],
+                                            errors="coerce"
+                                        )
+                                        .fillna(0)
+                                        .map(
+                                            lambda x:
+                                            f"${x:,.0f}"
+                                        )
+                                    )
+
+
+                                tabla_pagos = (
+                                    tabla_pagos.rename(
+                                        columns={
+
+                                            "fecha_pago":
+                                                "Fecha",
+
+                                            "valor":
+                                                "Pago",
+
+                                            "concepto":
+                                                "Concepto",
+
+                                            "valor_mensualidad":
+                                                "Mensualidad",
+
+                                        }
+                                    )
+                                )
+
+
+                                st.dataframe(
+                                    tabla_pagos,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+
+                            else:
+
+                                st.info(
+                                    "Este cliente todavía "
+                                    "no tiene pagos registrados."
+                                )
+
+
+                            # ====================================================
+                            # HISTORIAL DE CLASES DEL CLIENTE
+                            # ====================================================
+
+                            st.markdown(
+                                "---"
+                            )
+
+                            mostrar_resumen_clases(
+                                df_clases,
+                                id_cliente,
+                                "🏋️ Historial de Clases"
+                            )
+
+
+                            resumen_cliente_clases = (
+                                obtener_resumen_clases(
+                                    df_clases,
+                                    id_cliente
+                                )
+                            )
+
+
+                            if not resumen_cliente_clases[
+                                "registros"
+                            ].empty:
+
+                                clases_mostrar = (
+                                    resumen_cliente_clases[
+                                        "registros"
+                                    ].copy()
+                                )
+
+
+                                columnas_clases = [
+
+                                    columna
+
+                                    for columna in [
+
+                                        "fecha_clase",
+                                        "plan",
+                                        "clases_contratadas",
+                                        "observacion",
+
+                                    ]
+
+                                    if columna
+                                    in clases_mostrar.columns
+
+                                ]
+
+
+                                tabla_clases = (
+                                    clases_mostrar[
+                                        columnas_clases
+                                    ].copy()
+                                )
+
+
+                                tabla_clases = (
+                                    tabla_clases.rename(
+                                        columns={
+
+                                            "fecha_clase":
+                                                "Fecha Clase",
+
+                                            "plan":
+                                                "Plan",
+
+                                            "clases_contratadas":
+                                                "Clases Contratadas",
+
+                                            "observacion":
+                                                "Observación",
+
+                                        }
+                                    )
+                                )
+
+
+                                st.dataframe(
+                                    tabla_clases.astype(str),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+
+                            # ====================================================
+                            # HISTORIAL Y PROGRESO
+                            # ====================================================
+
+                            st.markdown(
+                                "#### 📈 Historial y "
+                                "Progreso del Cliente"
+                            )
+
+
+                            if not df_historial.empty:
+
+                                h_cliente = (
+                                    df_historial[
+                                        df_historial[
+                                            "cedula"
+                                        ]
+                                        == id_cliente
+                                    ].copy()
+                                )
+
+
+                                if not h_cliente.empty:
+
+                                    mostrar_graficos_evolucion(
+                                        h_cliente
+                                    )
+
+
+                                    st.markdown(
+                                        "#### 📋 Registros "
+                                        "en Tabla"
+                                    )
+
+
+                                    h_cliente[
+                                        "_fecha_dt"
+                                    ] = pd.to_datetime(
+
+                                        h_cliente[
+                                            "fecha_evaluacion"
+                                        ],
+
+                                        format="%d-%m-%Y",
+
+                                        errors="coerce",
+
+                                    )
+
+
+                                    h_cliente_ord = (
+                                        h_cliente
+
+                                        .sort_values(
+                                            by="_fecha_dt",
+                                            ascending=False,
+                                        )
+
+                                        .drop(
+                                            columns=[
+                                                "_fecha_dt"
+                                            ]
+                                        )
+                                    )
+
+
+                                    st.dataframe(
+                                        h_cliente_ord.astype(
+                                            str
+                                        ),
+                                        use_container_width=True,
+                                    )
+
+
+                                else:
+
+                                    st.info(
+                                        "Este cliente no se ha "
+                                        "tomado medidas corporales "
+                                        "todavía."
+                                    )
+
+
+                            else:
+
+                                st.info(
+                                    "No hay registros en el "
+                                    "historial general."
+                                )
+
+
+                # ====================================================
+                # CONTROL DE CLASES
+                # ====================================================
+
+                elif (
+                    opcion_admin
+                    == "🏋️ Control de Clases"
+                ):
+
+                    st.subheader(
+                        "🏋️ Control de Clases Personalizadas"
+                    )
+
+
+                    st.info(
+                        "Aquí el ADMIN registra manualmente "
+                        "cada clase realmente tomada. "
+                        "No se generan clases automáticamente."
+                    )
+
+
+                    # ------------------------------------------------
+                    # SELECCIÓN DEL CLIENTE
+                    # ------------------------------------------------
+
+                    cliente_clase_sel = st.selectbox(
+
+                        "👤 Seleccionar Cliente:",
+
                         clientes[
                             "cedula"
                         ].astype(str)
@@ -2224,525 +3527,700 @@ else:
                         + clientes[
                             "nombre_completo"
                         ].astype(str),
+
+                        key="selector_cliente_clases"
+
                     )
-                )
 
 
-                if cedula_sel:
-
-                    id_cliente = (
-                        str(
-                            cedula_sel
-                            .split(" - ")[0]
-                        )
+                    id_cliente_clases = (
+                        cliente_clase_sel
+                        .split(" - ")[0]
                         .strip()
                     )
 
 
-                    cliente_encontrado = (
-                        clientes[
-                            clientes[
-                                "cedula"
-                            ]
-                            == id_cliente
+                    nombre_cliente_clases = (
+                        cliente_clase_sel
+                        .split(" - ", 1)[1]
+                    )
+
+
+                    st.markdown(
+                        f"### 👤 {nombre_cliente_clases}"
+                    )
+
+
+                    # ------------------------------------------------
+                    # RESUMEN ACTUAL
+                    # ------------------------------------------------
+
+                    mostrar_resumen_clases(
+                        df_clases,
+                        id_cliente_clases
+                    )
+
+
+                    resumen_actual = (
+                        obtener_resumen_clases(
+                            df_clases,
+                            id_cliente_clases
+                        )
+                    )
+
+
+                    # ------------------------------------------------
+                    # CONFIGURACIÓN DEL PLAN
+                    # ------------------------------------------------
+
+                    st.markdown(
+                        "---"
+                    )
+
+                    st.markdown(
+                        "#### ⚙️ Configuración del plan"
+                    )
+
+
+                    with st.form(
+                        f"form_config_clases_{id_cliente_clases}"
+                    ):
+
+                        col_plan1, col_plan2 = st.columns(2)
+
+
+                        with col_plan1:
+
+                            plan_cliente = st.selectbox(
+                                "Plan:",
+                                [
+                                    "Premium",
+                                    "Personalizado",
+                                    "Otro",
+                                ],
+                                index=(
+                                    0
+                                    if resumen_actual[
+                                        "plan"
+                                    ]
+                                    == "Sin plan registrado"
+                                    else
+                                    [
+                                        "Premium",
+                                        "Personalizado",
+                                        "Otro",
+                                    ].index(
+                                        resumen_actual[
+                                            "plan"
+                                        ]
+                                    )
+                                    if resumen_actual[
+                                        "plan"
+                                    ]
+                                    in [
+                                        "Premium",
+                                        "Personalizado",
+                                        "Otro",
+                                    ]
+                                    else 0
+                                )
+                            )
+
+
+                        with col_plan2:
+
+                            clases_contratadas = st.number_input(
+                                "Número de clases contratadas:",
+                                min_value=1,
+                                max_value=500,
+                                value=(
+                                    resumen_actual[
+                                        "clases_contratadas"
+                                    ]
+                                    if resumen_actual[
+                                        "clases_contratadas"
+                                    ] > 0
+                                    else 20
+                                ),
+                                step=1,
+                            )
+
+
+                        st.caption(
+                            "Ejemplo: el plan Premium puede "
+                            "tener 20 clases disponibles. "
+                            "Las clases solo se descuentan "
+                            "cuando el ADMIN registra una fecha."
+                        )
+
+
+                        guardar_config_plan = st.form_submit_button(
+                            "💾 Guardar configuración del plan",
+                            use_container_width=True
+                        )
+
+
+                        if guardar_config_plan:
+
+                            try:
+
+                                # ------------------------------------------------
+                                # Para configurar el plan sin crear una clase,
+                                # usamos una fecha vacía.
+                                # ------------------------------------------------
+
+                                id_config = (
+                                    f"{id_cliente_clases}_PLAN_"
+                                    f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                )
+
+
+                                fila_config = [
+
+                                    str(id_config),
+
+                                    str(id_cliente_clases),
+
+                                    "",
+
+                                    str(plan_cliente),
+
+                                    int(
+                                        clases_contratadas
+                                    ),
+
+                                    "Configuración del plan",
+
+                                    datetime.today().strftime(
+                                        "%d-%m-%Y"
+                                    ),
+
+                                ]
+
+
+                                respuesta_config = requests.post(
+
+                                    URL_API,
+
+                                    json={
+                                        "action":
+                                        "guardar_clase",
+
+                                        "row":
+                                        fila_config,
+                                    },
+
+                                    timeout=30,
+
+                                )
+
+
+                                respuesta_config.raise_for_status()
+
+
+                                try:
+
+                                    resultado_config = (
+                                        respuesta_config.json()
+                                    )
+
+                                except Exception:
+
+                                    resultado_config = {}
+
+
+                                if (
+                                    resultado_config.get(
+                                        "status"
+                                    )
+                                    == "error"
+                                ):
+
+                                    st.error(
+                                        "❌ Google Apps Script "
+                                        "reportó un error: "
+                                        + str(
+                                            resultado_config.get(
+                                                "message",
+                                                "Error desconocido"
+                                            )
+                                        )
+                                    )
+
+                                    st.stop()
+
+
+                                st.cache_data.clear()
+
+
+                                st.success(
+                                    "✅ Configuración del plan "
+                                    "guardada correctamente."
+                                )
+
+
+                                st.rerun()
+
+
+                            except Exception as e:
+
+                                st.error(
+                                    "❌ Error guardando "
+                                    f"el plan: {e}"
+                                )
+
+
+                    # ------------------------------------------------
+                    # REGISTRAR CLASE
+                    # ------------------------------------------------
+
+                    st.markdown(
+                        "---"
+                    )
+
+                    st.markdown(
+                        "#### 📅 Registrar clase tomada"
+                    )
+
+
+                    if (
+                        resumen_actual[
+                            "clases_contratadas"
+                        ]
+                        > 0
+                        and
+                        resumen_actual[
+                            "clases_tomadas"
+                        ]
+                        >=
+                        resumen_actual[
+                            "clases_contratadas"
+                        ]
+                    ):
+
+                        st.warning(
+                            "⚠️ Este cliente ya utilizó "
+                            "todas las clases contratadas."
+                        )
+
+
+                    with st.form(
+                        f"form_registro_clase_{id_cliente_clases}"
+                    ):
+
+                        fecha_clase = st.date_input(
+                            "📅 Fecha de la clase tomada:",
+                            value=date.today(),
+                            max_value=date.today(),
+                            format="DD-MM-YYYY",
+                        )
+
+
+                        observacion_clase = st.text_input(
+                            "Observación de la clase:",
+                            placeholder=(
+                                "Ej: Entrenamiento de pierna, "
+                                "sesión personalizada, etc."
+                            )
+                        ).strip()
+
+
+                        registrar_clase = st.form_submit_button(
+                            "🏋️ Registrar Clase Tomada",
+                            use_container_width=True
+                        )
+
+
+                        if registrar_clase:
+
+                            try:
+
+                                # ------------------------------------------------
+                                # VALIDAR PLAN
+                                # ------------------------------------------------
+
+                                if (
+                                    resumen_actual[
+                                        "clases_contratadas"
+                                    ]
+                                    <= 0
+                                ):
+
+                                    st.error(
+                                        "❌ Primero debes configurar "
+                                        "el plan y el número de clases "
+                                        "contratadas."
+                                    )
+
+                                    st.stop()
+
+
+                                # ------------------------------------------------
+                                # VALIDAR CUPO
+                                # ------------------------------------------------
+
+                                if (
+                                    resumen_actual[
+                                        "clases_tomadas"
+                                    ]
+                                    >=
+                                    resumen_actual[
+                                        "clases_contratadas"
+                                    ]
+                                ):
+
+                                    st.error(
+                                        "❌ El cliente ya utilizó "
+                                        "todas las clases de su plan."
+                                    )
+
+                                    st.stop()
+
+
+                                # ------------------------------------------------
+                                # FECHA
+                                # ------------------------------------------------
+
+                                fecha_clase_str = (
+                                    fecha_clase.strftime(
+                                        "%d-%m-%Y"
+                                    )
+                                )
+
+
+                                # ------------------------------------------------
+                                # EVITAR DUPLICADOS
+                                # ------------------------------------------------
+
+                                clases_cliente = (
+                                    resumen_actual[
+                                        "registros"
+                                    ]
+                                )
+
+
+                                if (
+                                    not clases_cliente.empty
+                                    and
+                                    "fecha_clase"
+                                    in clases_cliente.columns
+                                ):
+
+                                    fechas_existentes = (
+                                        clases_cliente[
+                                            "fecha_clase"
+                                        ]
+                                        .astype(str)
+                                        .str.strip()
+                                        .tolist()
+                                    )
+
+
+                                    if (
+                                        fecha_clase_str
+                                        in fechas_existentes
+                                    ):
+
+                                        st.error(
+                                            "❌ Ya existe una clase "
+                                            "registrada para este cliente "
+                                            f"el {fecha_clase_str}."
+                                        )
+
+                                        st.stop()
+
+
+                                # ------------------------------------------------
+                                # GENERAR ID
+                                # ------------------------------------------------
+
+                                id_clase = (
+                                    f"{id_cliente_clases}_"
+                                    f"{fecha_clase.strftime('%Y%m%d')}_"
+                                    f"{datetime.today().strftime('%H%M%S%f')}"
+                                )
+
+
+                                # ------------------------------------------------
+                                # FILA
+                                # ------------------------------------------------
+
+                                fila_clase = [
+
+                                    str(id_clase),
+
+                                    str(id_cliente_clases),
+
+                                    str(fecha_clase_str),
+
+                                    str(
+                                        resumen_actual[
+                                            "plan"
+                                        ]
+                                    ),
+
+                                    int(
+                                        resumen_actual[
+                                            "clases_contratadas"
+                                        ]
+                                    ),
+
+                                    (
+                                        observacion_clase
+                                        if observacion_clase
+                                        else
+                                        "Clase personalizada"
+                                    ),
+
+                                    datetime.today().strftime(
+                                        "%d-%m-%Y"
+                                    ),
+
+                                ]
+
+
+                                # ------------------------------------------------
+                                # ENVIAR A APPS SCRIPT
+                                # ------------------------------------------------
+
+                                respuesta_clase = requests.post(
+
+                                    URL_API,
+
+                                    json={
+                                        "action":
+                                        "guardar_clase",
+
+                                        "row":
+                                        fila_clase,
+                                    },
+
+                                    timeout=30,
+
+                                )
+
+
+                                respuesta_clase.raise_for_status()
+
+
+                                try:
+
+                                    resultado_clase = (
+                                        respuesta_clase.json()
+                                    )
+
+                                except Exception:
+
+                                    resultado_clase = {}
+
+
+                                if (
+                                    resultado_clase.get(
+                                        "status"
+                                    )
+                                    == "error"
+                                ):
+
+                                    st.error(
+                                        "❌ Google Apps Script "
+                                        "reportó un error: "
+                                        + str(
+                                            resultado_clase.get(
+                                                "message",
+                                                "Error desconocido"
+                                            )
+                                        )
+                                    )
+
+                                    st.stop()
+
+
+                                st.cache_data.clear()
+
+
+                                clases_nuevas = (
+                                    resumen_actual[
+                                        "clases_tomadas"
+                                    ]
+                                    + 1
+                                )
+
+
+                                clases_restantes_nuevas = max(
+                                    resumen_actual[
+                                        "clases_contratadas"
+                                    ]
+                                    -
+                                    clases_nuevas,
+                                    0
+                                )
+
+
+                                porcentaje_nuevo = (
+                                    clases_nuevas
+                                    /
+                                    resumen_actual[
+                                        "clases_contratadas"
+                                    ]
+                                ) * 100
+
+
+                                st.success(
+                                    "✅ Clase registrada correctamente."
+                                )
+
+
+                                c1, c2, c3 = st.columns(3)
+
+
+                                c1.metric(
+                                    "Clases tomadas",
+                                    clases_nuevas
+                                )
+
+
+                                c2.metric(
+                                    "Clases restantes",
+                                    clases_restantes_nuevas
+                                )
+
+
+                                c3.metric(
+                                    "% utilizado",
+                                    f"{min(porcentaje_nuevo, 100):.1f}%"
+                                )
+
+
+                                st.rerun()
+
+
+                            except Exception as e:
+
+                                st.error(
+                                    "❌ Error registrando "
+                                    f"la clase: {e}"
+                                )
+
+
+                    # ------------------------------------------------
+                    # HISTORIAL DE CLASES
+                    # ------------------------------------------------
+
+                    st.markdown(
+                        "---"
+                    )
+
+                    st.markdown(
+                        "#### 📋 Historial de clases tomadas"
+                    )
+
+
+                    resumen_historial = (
+                        obtener_resumen_clases(
+                            df_clases,
+                            id_cliente_clases
+                        )
+                    )
+
+
+                    registros_historial = (
+                        resumen_historial[
+                            "registros"
                         ]
                     )
 
 
-                    if not cliente_encontrado.empty:
+                    if not registros_historial.empty:
 
-                        u_info = (
-                            cliente_encontrado
-                            .iloc[0]
+                        historial = (
+                            registros_historial.copy()
                         )
 
 
-                        st.markdown(
-                            "---"
-                        )
+                        if "fecha_clase" in historial.columns:
+
+                            historial[
+                                "_fecha_dt"
+                            ] = pd.to_datetime(
+                                historial[
+                                    "fecha_clase"
+                                ],
+                                format="%d-%m-%Y",
+                                errors="coerce"
+                            )
 
 
-                        st.markdown(
-                            f"### 📋 Información de: "
-                            f"{u_info['nombre_completo']}"
-                        )
-
-
-                        info_col1, info_col2, info_col3 = (
-                            st.columns(3)
-                        )
-
-
-                        info_col1.markdown(
-                            "WhatsApp: "
-                            f"{u_info.get('whatsapp', 'No registra')}"
-                        )
-
-
-                        info_col2.markdown(
-                            "EPS: "
-                            f"{str(u_info.get('eps', 'No registra')).upper()}"
-                        )
-
-
-                        info_col3.markdown(
-                            "Fecha Registro: "
-                            f"{u_info.get('fecha_registro', 'No registra')}"
-                        )
-
-
-                        st.markdown(
-                            "Condiciones Médicas / "
-                            "Lesiones: "
-                            f"{u_info.get('condiciones_medicas', 'Ninguna')}"
-                        )
-
-
-                        ws_url = link_whatsapp(
-                            u_info.get(
-                                "whatsapp",
-                                ""
-                            ),
-                            u_info[
-                                "nombre_completo"
-                            ],
-                        )
-
-
-                        st.markdown(
-                            f"[💬 Enviar Mensaje de "
-                            f"Seguimiento por WhatsApp]"
-                            f"({ws_url})"
-                        )
-
-
-                        # ====================================================
-                        # PAGOS Y MENSUALIDAD
-                        # ====================================================
-
-                        st.markdown("---")
-                        st.markdown("#### 💳 Pagos y Mensualidad")
-
-                        pagos_cliente = pd.DataFrame()
-
-                        if (
-                            not df_pagos.empty
-                            and "cedula" in df_pagos.columns
-                        ):
-                            pagos_cliente = df_pagos[
-                                df_pagos["cedula"] == id_cliente
-                            ].copy()
-
-                        total_pagado = 0.0
-                        valor_mensualidad_actual = 0.0
-
-                        if not pagos_cliente.empty:
-
-                            if "valor" in pagos_cliente.columns:
-                                total_pagado = pd.to_numeric(
-                                    pagos_cliente["valor"],
-                                    errors="coerce"
-                                ).fillna(0).sum()
-
-                            if "valor_mensualidad" in pagos_cliente.columns:
-                                mensualidades_validas = pd.to_numeric(
-                                    pagos_cliente["valor_mensualidad"],
-                                    errors="coerce"
-                                ).dropna()
-
-                                if not mensualidades_validas.empty:
-                                    valor_mensualidad_actual = float(
-                                        mensualidades_validas.iloc[-1]
-                                    )
-
-                        saldo_actual = max(
-                            valor_mensualidad_actual - total_pagado,
-                            0.0
-                        )
-
-                        estado_pago = (
-                            "🟢 PAGADO"
-                            if valor_mensualidad_actual > 0
-                            and saldo_actual <= 0
-                            else "🟡 ABONO"
-                            if total_pagado > 0
-                            else "🔴 PENDIENTE"
-                        )
-
-                        p1, p2, p3, p4 = st.columns(4)
-
-                        p1.metric(
-                            "Mensualidad",
-                            f"${valor_mensualidad_actual:,.0f}"
-                        )
-
-                        p2.metric(
-                            "Total Pagado",
-                            f"${total_pagado:,.0f}"
-                        )
-
-                        p3.metric(
-                            "Saldo Pendiente",
-                            f"${saldo_actual:,.0f}"
-                        )
-
-                        p4.metric(
-                            "Estado",
-                            estado_pago
-                        )
-
-                        # ----------------------------------------------------
-                        # REGISTRAR NUEVO PAGO
-                        # ----------------------------------------------------
-
-                        with st.expander(
-                            "➕ Registrar nuevo pago / abono",
-                            expanded=pagos_cliente.empty
-                        ):
-
-                            with st.form(
-                                f"form_pago_{id_cliente}"
-                            ):
-
-                                if valor_mensualidad_actual > 0:
-                                    mensualidad_default = float(
-                                        valor_mensualidad_actual
-                                    )
-                                else:
-                                    mensualidad_default = 250000.0
-
-                                valor_mensualidad = st.number_input(
-                                    "Valor de la mensualidad ($):",
-                                    min_value=1.0,
-                                    value=mensualidad_default,
-                                    step=5000.0,
-                                    format="%.0f",
+                            historial = (
+                                historial
+                                .sort_values(
+                                    "_fecha_dt",
+                                    ascending=False
                                 )
+                            )
 
-                                saldo_para_nuevo_pago = max(
-                                    float(valor_mensualidad)
-                                    - total_pagado,
-                                    0.0
-                                )
 
-                                if total_pagado > 0:
-                                    st.caption(
-                                        "Pagado hasta ahora: "
-                                        f"${total_pagado:,.0f} | "
-                                        "Saldo según esta mensualidad: "
-                                        f"${saldo_para_nuevo_pago:,.0f}"
-                                    )
+                        columnas_historial = [
 
-                                valor_pago = st.number_input(
-                                    "Valor del pago / abono ($):",
-                                    min_value=1.0,
-                                    value=(
-                                        saldo_para_nuevo_pago
-                                        if saldo_para_nuevo_pago > 0
-                                        else 1.0
-                                    ),
-                                    step=5000.0,
-                                    format="%.0f",
-                                )
+                            columna
 
-                                concepto_pago = st.text_input(
-                                    "Concepto:",
-                                    value="Abono mensualidad"
-                                ).strip()
+                            for columna in [
 
-                                guardar_pago = st.form_submit_button(
-                                    "💾 Registrar Pago",
-                                    use_container_width=True
-                                )
+                                "fecha_clase",
+                                "plan",
+                                "clases_contratadas",
+                                "observacion",
+                                "fecha_registro",
 
-                                if guardar_pago:
-
-                                    try:
-
-                                        valor_mensualidad = float(
-                                            valor_mensualidad
-                                        )
-
-                                        valor_pago = float(
-                                            valor_pago
-                                        )
-
-                                        if valor_mensualidad <= 0:
-                                            st.error(
-                                                "❌ La mensualidad debe ser mayor que cero."
-                                            )
-                                            st.stop()
-
-                                        if valor_pago <= 0:
-                                            st.error(
-                                                "❌ El valor del pago debe ser mayor que cero."
-                                            )
-                                            st.stop()
-
-                                        if not concepto_pago:
-                                            concepto_pago = "Abono mensualidad"
-
-                                        nuevo_total = (
-                                            total_pagado
-                                            + valor_pago
-                                        )
-
-                                        if nuevo_total > valor_mensualidad + 0.001:
-                                            st.error(
-                                                "❌ El abono supera el saldo pendiente. "
-                                                f"Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
-                                            )
-                                            st.stop()
-
-                                        id_pago = (
-                                            f"{id_cliente}_"
-                                            f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
-                                        )
-
-                                        fecha_pago = datetime.today().strftime(
-                                            "%d-%m-%Y"
-                                        )
-
-                                        fila_pago = [
-                                            str(id_pago),
-                                            str(id_cliente),
-                                            str(fecha_pago),
-                                            float(valor_pago),
-                                            str(concepto_pago),
-                                            float(valor_mensualidad),
-                                        ]
-
-                                        respuesta_pago = requests.post(
-                                            URL_API,
-                                            json={
-                                                "action": "guardar_pago",
-                                                "row": fila_pago,
-                                            },
-                                            timeout=30,
-                                        )
-
-                                        respuesta_pago.raise_for_status()
-
-                                        try:
-                                            resultado_pago = respuesta_pago.json()
-                                        except Exception:
-                                            resultado_pago = {}
-
-                                        if (
-                                            resultado_pago.get("status")
-                                            == "error"
-                                        ):
-                                            st.error(
-                                                "❌ Google Apps Script reportó un error: "
-                                                + str(
-                                                    resultado_pago.get(
-                                                        "message",
-                                                        "Error desconocido"
-                                                    )
-                                                )
-                                            )
-                                            st.stop()
-
-                                        st.cache_data.clear()
-
-                                        nuevo_saldo = max(
-                                            valor_mensualidad
-                                            - nuevo_total,
-                                            0.0
-                                        )
-
-                                        if nuevo_saldo <= 0.001:
-                                            st.success(
-                                                "✅ Pago registrado. "
-                                                "La mensualidad quedó completamente pagada."
-                                            )
-                                        else:
-                                            st.success(
-                                                "✅ Abono registrado correctamente. "
-                                                f"Saldo pendiente: ${nuevo_saldo:,.0f}."
-                                            )
-
-                                        st.rerun()
-
-                                    except Exception as e:
-
-                                        st.error(
-                                            "❌ Error registrando el pago: "
-                                            f"{e}"
-                                        )
-
-                        # ----------------------------------------------------
-                        # HISTORIAL DE PAGOS
-                        # ----------------------------------------------------
-
-                        if not pagos_cliente.empty:
-
-                            st.markdown("#### 📜 Historial de Pagos")
-
-                            pagos_mostrar = pagos_cliente.copy()
-
-                            if "fecha_pago" in pagos_mostrar.columns:
-                                pagos_mostrar["_fecha_dt"] = pd.to_datetime(
-                                    pagos_mostrar["fecha_pago"],
-                                    format="%d-%m-%Y",
-                                    errors="coerce"
-                                )
-
-                                pagos_mostrar = (
-                                    pagos_mostrar
-                                    .sort_values(
-                                        by="_fecha_dt",
-                                        ascending=False
-                                    )
-                                    .drop(columns=["_fecha_dt"])
-                                )
-
-                            columnas_pago_mostrar = [
-                                columna
-                                for columna in [
-                                    "fecha_pago",
-                                    "valor",
-                                    "concepto",
-                                    "valor_mensualidad",
-                                ]
-                                if columna in pagos_mostrar.columns
                             ]
 
-                            tabla_pagos = pagos_mostrar[
-                                columnas_pago_mostrar
-                            ].copy()
+                            if columna
+                            in historial.columns
 
-                            if "valor" in tabla_pagos.columns:
-                                tabla_pagos["valor"] = (
-                                    pd.to_numeric(
-                                        tabla_pagos["valor"],
-                                        errors="coerce"
-                                    )
-                                    .fillna(0)
-                                    .map(
-                                        lambda x: f"${x:,.0f}"
-                                    )
-                                )
+                        ]
 
-                            if "valor_mensualidad" in tabla_pagos.columns:
-                                tabla_pagos["valor_mensualidad"] = (
-                                    pd.to_numeric(
-                                        tabla_pagos["valor_mensualidad"],
-                                        errors="coerce"
-                                    )
-                                    .fillna(0)
-                                    .map(
-                                        lambda x: f"${x:,.0f}"
-                                    )
-                                )
 
-                            tabla_pagos = tabla_pagos.rename(
+                        historial = historial[
+                            columnas_historial
+                        ].copy()
+
+
+                        historial = (
+                            historial.rename(
                                 columns={
-                                    "fecha_pago": "Fecha",
-                                    "valor": "Pago",
-                                    "concepto": "Concepto",
-                                    "valor_mensualidad": "Mensualidad",
+
+                                    "fecha_clase":
+                                        "Fecha Clase",
+
+                                    "plan":
+                                        "Plan",
+
+                                    "clases_contratadas":
+                                        "Clases Contratadas",
+
+                                    "observacion":
+                                        "Observación",
+
+                                    "fecha_registro":
+                                        "Registrado",
+
                                 }
                             )
-
-                            st.dataframe(
-                                tabla_pagos,
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-
-                        else:
-
-                            st.info(
-                                "Este cliente todavía no tiene pagos registrados."
-                            )
-
-
-                        st.markdown(
-                            "#### 📈 Historial y "
-                            "Progreso del Cliente"
                         )
 
 
-                        if not df_historial.empty:
-
-                            h_cliente = (
-                                df_historial[
-                                    df_historial[
-                                        "cedula"
-                                    ]
-                                    == id_cliente
-                                ].copy()
-                            )
+                        st.dataframe(
+                            historial.astype(str),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
 
 
-                            if not h_cliente.empty:
+                    else:
 
-                                mostrar_graficos_evolucion(
-                                    h_cliente
-                                )
-
-
-                                st.markdown(
-                                    "#### 📋 Registros "
-                                    "en Tabla"
-                                )
-
-
-                                h_cliente[
-                                    "_fecha_dt"
-                                ] = pd.to_datetime(
-
-                                    h_cliente[
-                                        "fecha_evaluacion"
-                                    ],
-
-                                    format="%d-%m-%Y",
-
-                                    errors="coerce",
-
-                                )
-
-
-                                h_cliente_ord = (
-                                    h_cliente
-
-                                    .sort_values(
-                                        by="_fecha_dt",
-                                        ascending=False,
-                                    )
-
-                                    .drop(
-                                        columns=[
-                                            "_fecha_dt"
-                                        ]
-                                    )
-                                )
-
-
-                                st.dataframe(
-                                    h_cliente_ord.astype(
-                                        str
-                                    ),
-                                    use_container_width=True,
-                                )
-
-
-                            else:
-
-                                st.info(
-                                    "Este cliente no se ha "
-                                    "tomado medidas corporales "
-                                    "todavía."
-                                )
-
-
-                        else:
-
-                            st.info(
-                                "No hay registros en el "
-                                "historial general."
-                            )
+                        st.info(
+                            "Este cliente todavía "
+                            "no tiene clases registradas."
+                        )
 
 
             else:
