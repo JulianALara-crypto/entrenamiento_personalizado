@@ -1,7 +1,7 @@
 import math
 import os
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 import requests
@@ -14,7 +14,7 @@ from PIL import Image
 # ============================================================
 
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbzs9afA0kAWJEh3KRoUmRoNmOglfTPhJvDG_HLVYA_tvOHUpBvxzQq-nu5YMB5PFq0M/exec"
+    "https://script.google.com/macros/s/AKfycbwMF5jkXXAiw-fDPewAJAm5AOgc78laP0RpGS_W_3i6uvZHvB2raDh9c7eVAq6iOCR2/exec"
 )
 
 
@@ -127,6 +127,133 @@ def formatear_fecha(valor_fecha):
         return str(valor_fecha)
 
 
+
+
+# ============================================================
+# PLANES
+# ============================================================
+
+@st.cache_data(ttl=600, show_spinner=False)
+def cargar_planes():
+
+    try:
+        respuesta = requests.get(
+            URL_API,
+            params={"action": "planes"},
+            timeout=20,
+        )
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+
+        if not isinstance(datos, list) or not datos:
+            return pd.DataFrame()
+
+        if isinstance(datos[0], dict):
+            df = pd.DataFrame(datos)
+        else:
+            if len(datos) <= 1:
+                return pd.DataFrame()
+            columnas = [str(c).strip().lower() for c in datos[0]]
+            df = pd.DataFrame(datos[1:], columns=columnas)
+
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        if "cedula" in df.columns:
+            df["cedula"] = (
+                df["cedula"].astype(str)
+                .str.replace(r"\.0$", "", regex=True)
+                .str.strip()
+            )
+
+        for columna in ["fecha_inicio", "fecha_fin"]:
+            if columna in df.columns:
+                df[columna] = pd.to_datetime(
+                    df[columna], errors="coerce"
+                )
+
+        if "clases_incluidas" in df.columns:
+            df["clases_incluidas"] = pd.to_numeric(
+                df["clases_incluidas"], errors="coerce"
+            )
+
+        return df
+
+    except Exception as e:
+        st.error(f"Error cargando planes: {e}")
+        return pd.DataFrame()
+
+
+# ============================================================
+# CLASES TOMADAS
+# ============================================================
+
+@st.cache_data(ttl=600, show_spinner=False)
+def cargar_clases():
+
+    try:
+        respuesta = requests.get(
+            URL_API,
+            params={"action": "clases"},
+            timeout=20,
+        )
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+
+        if not isinstance(datos, list) or not datos:
+            return pd.DataFrame(
+                columns=[
+                    "id_clase", "cedula", "nombre_completo",
+                    "fecha_clase", "tipo_plan", "periodo", "estado"
+                ]
+            )
+
+        if isinstance(datos[0], dict):
+            df = pd.DataFrame(datos)
+        else:
+            if len(datos) <= 1:
+                return pd.DataFrame()
+            columnas = [str(c).strip().lower() for c in datos[0]]
+            df = pd.DataFrame(datos[1:], columns=columnas)
+
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        if "cedula" in df.columns:
+            df["cedula"] = (
+                df["cedula"].astype(str)
+                .str.replace(r"\.0$", "", regex=True)
+                .str.strip()
+            )
+
+        if "fecha_clase" in df.columns:
+            df["fecha_clase_dt"] = pd.to_datetime(
+                df["fecha_clase"], errors="coerce"
+            )
+
+        return df
+
+    except Exception as e:
+        st.error(f"Error cargando clases: {e}")
+        return pd.DataFrame()
+
+
+def normalizar_cedula(valor):
+    if pd.isna(valor):
+        return ""
+    texto = str(valor).strip()
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    return texto
+
+
+def clases_incluidas_por_plan(tipo_plan):
+    """Respaldo para planes antiguos que aún no tengan la columna
+    clases_incluidas. La fuente principal debe ser la hoja Planes."""
+    mapa = {
+        "premium": 20,
+    }
+    return mapa.get(str(tipo_plan).strip().lower(), 0)
 # ============================================================
 # MOSTRAR LOGO
 # ============================================================
@@ -450,7 +577,7 @@ def link_whatsapp(
 # CARGAR BASE DE DATOS
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=2)
 def cargar_bd():
 
     try:
@@ -2329,32 +2456,9 @@ else:
                             not df_pagos.empty
                             and "cedula" in df_pagos.columns
                         ):
-                            # Normalizar cédulas: Google Sheets puede
-                            # devolverlas como entero, decimal o texto.
-                            def normalizar_cedula(valor):
-                                if pd.isna(valor):
-                                    return ""
-                                texto = str(valor).strip()
-                                if texto.endswith(".0"):
-                                    texto = texto[:-2]
-                                return texto
-
-                            cedula_cliente = normalizar_cedula(id_cliente)
-
-                            df_pagos = df_pagos.copy()
-                            df_pagos["cedula_normalizada"] = (
-                                df_pagos["cedula"].apply(normalizar_cedula)
-                            )
-
                             pagos_cliente = df_pagos[
-                                df_pagos["cedula_normalizada"] == cedula_cliente
+                                df_pagos["cedula"] == id_cliente
                             ].copy()
-
-                            pagos_cliente.drop(
-                                columns=["cedula_normalizada"],
-                                errors="ignore",
-                                inplace=True
-                            )
 
                         total_pagado = 0.0
                         valor_mensualidad_actual = 0.0
@@ -2680,6 +2784,260 @@ else:
                                 "Este cliente todavía no tiene pagos registrados."
                             )
 
+
+                        # ====================================================
+                        # CONTROL DE CLASES TOMADAS
+                        # ====================================================
+
+                        st.markdown("---")
+                        st.markdown("#### 🏋️ Control de Clases")
+
+                        df_planes = cargar_planes()
+                        df_clases = cargar_clases()
+
+                        plan_cliente = pd.DataFrame()
+
+                        if not df_planes.empty and "cedula" in df_planes.columns:
+                            planes_cliente = df_planes[
+                                df_planes["cedula"].apply(normalizar_cedula)
+                                == normalizar_cedula(id_cliente)
+                            ].copy()
+
+                            if not planes_cliente.empty:
+                                if "estado" in planes_cliente.columns:
+                                    activos = planes_cliente[
+                                        planes_cliente["estado"].astype(str).str.lower()
+                                        == "activo"
+                                    ]
+                                    if not activos.empty:
+                                        planes_cliente = activos
+
+                                if "fecha_inicio" in planes_cliente.columns:
+                                    planes_cliente = planes_cliente.sort_values(
+                                        "fecha_inicio", ascending=False
+                                    )
+
+                                plan_cliente = planes_cliente.iloc[[0]].copy()
+
+                        if plan_cliente.empty:
+                            st.warning(
+                                "⚠️ Este cliente no tiene un plan registrado/activo. "
+                                "Registra primero su plan en la hoja Planes."
+                            )
+                        else:
+                            registro_plan = plan_cliente.iloc[0]
+                            tipo_plan = str(
+                                registro_plan.get("tipo_plan", "Plan")
+                            ).strip()
+
+                            clases_plan = 0
+                            if "clases_incluidas" in registro_plan.index:
+                                try:
+                                    clases_plan = int(
+                                        float(registro_plan.get("clases_incluidas", 0) or 0)
+                                    )
+                                except Exception:
+                                    clases_plan = 0
+
+                            if clases_plan <= 0:
+                                clases_plan = clases_incluidas_por_plan(tipo_plan)
+
+                            fecha_inicio_plan = registro_plan.get("fecha_inicio")
+                            fecha_fin_plan = registro_plan.get("fecha_fin")
+
+                            # La fecha elegida determina el periodo mensual de clases.
+                            fecha_clase = st.date_input(
+                                "📅 Selecciona el día de la clase tomada",
+                                value=date.today(),
+                                key=f"fecha_clase_{id_cliente}",
+                            )
+
+                            periodo_clase = fecha_clase.strftime("%Y-%m")
+
+                            if "fecha_clase_dt" in df_clases.columns:
+                                clases_cliente = df_clases[
+                                    df_clases["cedula"].apply(normalizar_cedula)
+                                    == normalizar_cedula(id_cliente)
+                                ].copy()
+                            elif not df_clases.empty and "cedula" in df_clases.columns:
+                                clases_cliente = df_clases[
+                                    df_clases["cedula"].apply(normalizar_cedula)
+                                    == normalizar_cedula(id_cliente)
+                                ].copy()
+                            else:
+                                clases_cliente = pd.DataFrame()
+
+                            if not clases_cliente.empty and "periodo" in clases_cliente.columns:
+                                clases_periodo = clases_cliente[
+                                    clases_cliente["periodo"].astype(str).str.strip()
+                                    == periodo_clase
+                                ].copy()
+                            elif not clases_cliente.empty and "fecha_clase_dt" in clases_cliente.columns:
+                                clases_periodo = clases_cliente[
+                                    clases_cliente["fecha_clase_dt"].dt.strftime("%Y-%m")
+                                    == periodo_clase
+                                ].copy()
+                            else:
+                                clases_periodo = pd.DataFrame()
+
+                            clases_tomadas = len(clases_periodo)
+                            clases_restantes = max(
+                                clases_plan - clases_tomadas,
+                                0,
+                            )
+
+                            c1, c2, c3, c4 = st.columns(4)
+                            c1.metric("Plan", tipo_plan)
+                            c2.metric("Clases contratadas", clases_plan)
+                            c3.metric("Clases tomadas", clases_tomadas)
+                            c4.metric("Clases restantes", clases_restantes)
+
+                            if fecha_inicio_plan is not None and not pd.isna(fecha_inicio_plan):
+                                texto_vigencia = str(fecha_inicio_plan.date())
+                                if fecha_fin_plan is not None and not pd.isna(fecha_fin_plan):
+                                    texto_vigencia += f" → {fecha_fin_plan.date()}"
+                                st.caption(f"📆 Vigencia del plan: {texto_vigencia} | Periodo de clases: {periodo_clase}")
+
+                            with st.form(f"form_registrar_clase_{id_cliente}_{periodo_clase}"):
+                                registrar_clase = st.form_submit_button(
+                                    "✅ Registrar clase tomada",
+                                    use_container_width=True,
+                                )
+
+                                if registrar_clase:
+                                    if clases_plan <= 0:
+                                        st.error(
+                                            "❌ El plan no tiene una cantidad de clases definida. "
+                                            "Agrega la columna 'clases_incluidas' en Planes."
+                                        )
+                                        st.stop()
+
+                                    # Validar vigencia del plan si existen fechas.
+                                    fecha_dt = pd.Timestamp(fecha_clase)
+                                    if (
+                                        fecha_inicio_plan is not None
+                                        and not pd.isna(fecha_inicio_plan)
+                                        and fecha_dt < pd.Timestamp(fecha_inicio_plan).normalize()
+                                    ):
+                                        st.error("❌ La fecha está antes del inicio del plan.")
+                                        st.stop()
+
+                                    if (
+                                        fecha_fin_plan is not None
+                                        and not pd.isna(fecha_fin_plan)
+                                        and fecha_dt > pd.Timestamp(fecha_fin_plan).normalize()
+                                    ):
+                                        st.error("❌ La fecha está después del vencimiento del plan.")
+                                        st.stop()
+
+                                    if clases_tomadas >= clases_plan:
+                                        st.error(
+                                            f"❌ El cliente ya completó las {clases_plan} clases del periodo."
+                                        )
+                                        st.stop()
+
+                                    fecha_texto = fecha_clase.strftime("%d-%m-%Y")
+                                    duplicada = False
+
+                                    if not clases_periodo.empty:
+                                        if "fecha_clase" in clases_periodo.columns:
+                                            fechas_existentes = pd.to_datetime(
+                                                clases_periodo["fecha_clase"],
+                                                errors="coerce",
+                                                dayfirst=True,
+                                            )
+                                            duplicada = fechas_existentes.dt.strftime(
+                                                "%d-%m-%Y"
+                                            ).eq(fecha_texto).any()
+
+                                    if duplicada:
+                                        st.error(
+                                            "⚠️ Ya existe una clase registrada para este cliente en esa fecha."
+                                        )
+                                        st.stop()
+
+                                    id_clase = (
+                                        f"CL-{id_cliente}-"
+                                        f"{fecha_clase.strftime('%Y%m%d')}-"
+                                        f"{datetime.now().strftime('%H%M%S%f')}"
+                                    )
+
+                                    fila_clase = [
+                                        id_clase,
+                                        str(id_cliente),
+                                        str(u_info.get("nombre_completo", "")),
+                                        fecha_texto,
+                                        tipo_plan,
+                                        periodo_clase,
+                                        "Tomada",
+                                    ]
+
+                                    respuesta_clase = requests.post(
+                                        URL_API,
+                                        json={
+                                            "action": "registrar_clase",
+                                            "row": fila_clase,
+                                        },
+                                        timeout=20,
+                                    )
+                                    respuesta_clase.raise_for_status()
+
+                                    try:
+                                        resultado_clase = respuesta_clase.json()
+                                    except Exception:
+                                        resultado_clase = {}
+
+                                    if resultado_clase.get("status") == "error":
+                                        st.error(
+                                            "❌ Google Apps Script reportó un error: "
+                                            + str(resultado_clase.get("message", "Error desconocido"))
+                                        )
+                                        st.stop()
+
+                                    cargar_clases.clear()
+                                    st.success(
+                                        f"✅ Clase registrada para el {fecha_texto}. "
+                                        f"Ahora lleva {clases_tomadas + 1} de {clases_plan}."
+                                    )
+                                    st.rerun()
+
+                            if not clases_periodo.empty:
+                                st.markdown("##### 📋 Historial de clases tomadas")
+
+                                clases_mostrar = clases_periodo.copy()
+                                if "fecha_clase_dt" in clases_mostrar.columns:
+                                    clases_mostrar = clases_mostrar.sort_values(
+                                        "fecha_clase_dt", ascending=False
+                                    )
+
+                                columnas_clase = [
+                                    c for c in [
+                                        "fecha_clase",
+                                        "tipo_plan",
+                                        "periodo",
+                                        "estado",
+                                    ] if c in clases_mostrar.columns
+                                ]
+
+                                tabla_clases = clases_mostrar[columnas_clase].copy()
+                                tabla_clases = tabla_clases.rename(
+                                    columns={
+                                        "fecha_clase": "Fecha",
+                                        "tipo_plan": "Plan",
+                                        "periodo": "Periodo",
+                                        "estado": "Estado",
+                                    }
+                                )
+
+                                st.dataframe(
+                                    tabla_clases,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+                            else:
+                                st.info(
+                                    f"Todavía no hay clases registradas en {periodo_clase}."
+                                )
 
                         st.markdown(
                             "#### 📈 Historial y "
