@@ -105,34 +105,50 @@ st.markdown(
 # FUNCIÓN FORMATEAR FECHA
 # ============================================================
 
+def parsear_fecha(valor_fecha):
+    """Convierte fechas de Google Sheets/ISO/DD-MM-YYYY a Timestamp."""
+    if valor_fecha is None:
+        return pd.NaT
+
+    if isinstance(valor_fecha, (datetime, date)):
+        try:
+            return pd.Timestamp(valor_fecha)
+        except Exception:
+            return pd.NaT
+
+    texto = str(valor_fecha).strip()
+
+    if not texto:
+        return pd.NaT
+
+    # Formato principal de la aplicación: DD-MM-YYYY
+    dt = pd.to_datetime(
+        texto,
+        format="%d-%m-%Y",
+        errors="coerce"
+    )
+
+    if not pd.isna(dt):
+        return dt
+
+    # ISO generado por Google Apps Script
+    dt = pd.to_datetime(
+        texto,
+        errors="coerce",
+        dayfirst=False
+    )
+
+    return dt
+
+
 def formatear_fecha(valor_fecha):
+    dt = parsear_fecha(valor_fecha)
 
-    if (
-        pd.isna(valor_fecha)
-        or not valor_fecha
-        or str(valor_fecha).strip() == ""
-    ):
-        return ""
+    if pd.isna(dt):
+        texto = str(valor_fecha).strip() if valor_fecha is not None else ""
+        return "" if texto.lower() in ("nan", "nat", "none") else texto
 
-    try:
-
-        dt = pd.to_datetime(
-            valor_fecha,
-            errors="coerce",
-            utc=True
-        )
-
-        if pd.isna(dt):
-
-            return str(valor_fecha)
-
-        return dt.strftime(
-            "%d-%m-%Y"
-        )
-
-    except Exception:
-
-        return str(valor_fecha)
+    return dt.strftime("%d-%m-%Y")
 
 
 # ============================================================
@@ -1178,171 +1194,158 @@ def obtener_resumen_clases(
     df_clases,
     cedula
 ):
+    """
+    Obtiene el estado del plan actual y las clases realmente tomadas.
+
+    Regla importante:
+    - Una fila con fecha_clase vacía = configuración de un nuevo plan.
+    - Una fila con fecha_clase = clase realmente tomada.
+    - Al configurar un nuevo plan, las clases anteriores dejan de contar
+      para el nuevo ciclo.
+    """
 
     resultado = {
-
         "plan": "Sin plan registrado",
-
         "clases_contratadas": 0,
-
         "clases_tomadas": 0,
-
         "clases_restantes": 0,
-
         "porcentaje": 0.0,
-
         "registros": pd.DataFrame(),
-
     }
 
-
     if (
-        df_clases.empty
+        df_clases is None
+        or df_clases.empty
         or "cedula" not in df_clases.columns
     ):
-
         return resultado
 
-
-    cedula = normalizar_cedula(
-        cedula
-    )
-
+    cedula = normalizar_cedula(cedula)
 
     registros = df_clases[
-        df_clases["cedula"]
-        == cedula
+        df_clases["cedula"].apply(normalizar_cedula) == cedula
     ].copy()
 
-
     if registros.empty:
-
         return resultado
 
+    # Mantener el orden original de Google Sheets.
+    registros["_orden"] = range(len(registros))
 
-    # --------------------------------------------------------
-    # CLASES TOMADAS
-    # --------------------------------------------------------
+    if "fecha_clase" not in registros.columns:
+        registros["fecha_clase"] = ""
 
-    if "fecha_clase" in registros.columns:
-
-        registros = registros[
-            registros[
-                "fecha_clase"
-            ]
-            .astype(str)
-            .str.strip()
-            != ""
-        ]
-
-
-    resultado[
-        "clases_tomadas"
-    ] = len(
-        registros
+    fechas_texto = (
+        registros["fecha_clase"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
     )
 
+    registros["_es_config"] = fechas_texto == ""
 
-    # --------------------------------------------------------
-    # PLAN ACTUAL
-    # --------------------------------------------------------
+    # Buscar la última configuración de plan.
+    configuraciones = registros[
+        registros["_es_config"]
+    ].copy()
 
-    if "plan" in registros.columns:
+    indice_config = None
 
-        planes = (
-            registros[
-                "plan"
-            ]
-            .astype(str)
-            .str.strip()
+    if not configuraciones.empty:
+        indice_config = int(
+            configuraciones["_orden"].iloc[-1]
         )
 
-        planes_validos = planes[
-            planes != ""
-        ]
+        config = configuraciones.iloc[-1]
 
-        if not planes_validos.empty:
+        if "plan" in config.index:
+            plan_config = str(
+                config["plan"]
+            ).strip()
 
-            resultado[
-                "plan"
-            ] = planes_validos.iloc[-1]
+            if plan_config:
+                resultado["plan"] = plan_config
 
-
-    # --------------------------------------------------------
-    # TOTAL CONTRATADO
-    # --------------------------------------------------------
-
-    if (
-        "clases_contratadas"
-        in registros.columns
-    ):
-
-        cantidades = pd.to_numeric(
-            registros[
-                "clases_contratadas"
-            ],
-            errors="coerce"
-        ).dropna()
-
-        if not cantidades.empty:
-
-            resultado[
-                "clases_contratadas"
-            ] = int(
-                cantidades.iloc[-1]
+        if "clases_contratadas" in config.index:
+            cantidad_config = pd.to_numeric(
+                config["clases_contratadas"],
+                errors="coerce"
             )
 
+            if not pd.isna(cantidad_config):
+                resultado["clases_contratadas"] = int(
+                    cantidad_config
+                )
 
-    # --------------------------------------------------------
-    # RESTANTES
-    # --------------------------------------------------------
+    # Si nunca hubo configuración explícita, usar el último registro
+    # con fecha como referencia histórica.
+    if indice_config is None:
+        registros_tomados = registros[
+            ~registros["_es_config"]
+        ].copy()
 
-    resultado[
-        "clases_restantes"
-    ] = max(
-        resultado[
-            "clases_contratadas"
-        ]
-        -
-        resultado[
-            "clases_tomadas"
-        ],
+        if not registros_tomados.empty:
+            ultimo = registros_tomados.iloc[-1]
+
+            if "plan" in ultimo.index:
+                plan_ultimo = str(
+                    ultimo["plan"]
+                ).strip()
+
+                if plan_ultimo:
+                    resultado["plan"] = plan_ultimo
+
+            if "clases_contratadas" in ultimo.index:
+                cantidad_ultimo = pd.to_numeric(
+                    ultimo["clases_contratadas"],
+                    errors="coerce"
+                )
+
+                if not pd.isna(cantidad_ultimo):
+                    resultado["clases_contratadas"] = int(
+                        cantidad_ultimo
+                    )
+
+    # Solo cuentan las clases posteriores a la última configuración.
+    if indice_config is not None:
+        registros_tomados = registros[
+            (registros["_orden"] > indice_config)
+            & (~registros["_es_config"])
+        ].copy()
+    else:
+        registros_tomados = registros[
+            ~registros["_es_config"]
+        ].copy()
+
+    resultado["clases_tomadas"] = len(
+        registros_tomados
+    )
+
+    resultado["clases_restantes"] = max(
+        resultado["clases_contratadas"]
+        - resultado["clases_tomadas"],
         0
     )
 
-
-    # --------------------------------------------------------
-    # PORCENTAJE
-    # --------------------------------------------------------
-
-    if (
-        resultado[
-            "clases_contratadas"
-        ]
-        > 0
-    ):
-
-        resultado[
-            "porcentaje"
-        ] = min(
+    if resultado["clases_contratadas"] > 0:
+        resultado["porcentaje"] = min(
             (
-                resultado[
-                    "clases_tomadas"
-                ]
-                /
-                resultado[
-                    "clases_contratadas"
-                ]
-            )
-            * 100,
+                resultado["clases_tomadas"]
+                / resultado["clases_contratadas"]
+            ) * 100,
             100
         )
 
+    # Limpiar columnas internas antes de devolver.
+    registros_tomados = registros_tomados.drop(
+        columns=[
+            "_orden",
+            "_es_config"
+        ],
+        errors="ignore"
+    )
 
-    resultado[
-        "registros"
-    ] = registros
-
+    resultado["registros"] = registros_tomados
 
     return resultado
 
@@ -2552,13 +2555,9 @@ else:
 
                 if "Fecha de Clase" in tabla.columns:
 
-                    tabla["_fecha"] = pd.to_datetime(
-                        tabla[
-                            "Fecha de Clase"
-                        ],
-                        format="%d-%m-%Y",
-                        errors="coerce"
-                    )
+                    tabla["_fecha"] = tabla[
+                        "Fecha de Clase"
+                    ].apply(parsear_fecha)
 
                     tabla = (
                         tabla
@@ -2777,72 +2776,93 @@ else:
                                 "#### 💳 Pagos y Mensualidad"
                             )
 
-
                             pagos_cliente = pd.DataFrame()
-
 
                             if (
                                 not df_pagos.empty
-                                and "cedula"
-                                in df_pagos.columns
+                                and "cedula" in df_pagos.columns
                             ):
-
                                 pagos_cliente = df_pagos[
-                                    df_pagos[
-                                        "cedula"
-                                    ]
+                                    df_pagos["cedula"]
                                     == id_cliente
                                 ].copy()
 
+                            # ------------------------------------------------
+                            # MES ACTUAL
+                            # ------------------------------------------------
 
-                            total_pagado = 0.0
+                            hoy = pd.Timestamp.today().normalize()
+
+                            if not pagos_cliente.empty:
+                                pagos_cliente["_fecha_dt"] = (
+                                    pagos_cliente["fecha_pago"]
+                                    .apply(parsear_fecha)
+                                    if "fecha_pago" in pagos_cliente.columns
+                                    else pd.NaT
+                                )
+
+                                pagos_mes_actual = pagos_cliente[
+                                    pagos_cliente["_fecha_dt"].notna()
+                                    & (
+                                        pagos_cliente["_fecha_dt"].dt.year
+                                        == hoy.year
+                                    )
+                                    & (
+                                        pagos_cliente["_fecha_dt"].dt.month
+                                        == hoy.month
+                                    )
+                                ].copy()
+
+                            else:
+                                pagos_mes_actual = pd.DataFrame()
+
+                            # ------------------------------------------------
+                            # MENSUALIDAD ACTUAL
+                            # ------------------------------------------------
 
                             valor_mensualidad_actual = 0.0
 
+                            if (
+                                not pagos_cliente.empty
+                                and "valor_mensualidad"
+                                in pagos_cliente.columns
+                            ):
+                                mensualidades_validas = (
+                                    pd.to_numeric(
+                                        pagos_cliente[
+                                            "valor_mensualidad"
+                                        ],
+                                        errors="coerce"
+                                    )
+                                    .dropna()
+                                )
 
-                            if not pagos_cliente.empty:
-
-                                if (
-                                    "valor"
-                                    in pagos_cliente.columns
-                                ):
-
-                                    total_pagado = (
-                                        pd.to_numeric(
-                                            pagos_cliente[
-                                                "valor"
-                                            ],
-                                            errors="coerce"
-                                        )
-                                        .fillna(0)
-                                        .sum()
+                                if not mensualidades_validas.empty:
+                                    valor_mensualidad_actual = float(
+                                        mensualidades_validas.iloc[-1]
                                     )
 
+                            if valor_mensualidad_actual <= 0:
+                                valor_mensualidad_actual = 250000.0
 
-                                if (
-                                    "valor_mensualidad"
-                                    in pagos_cliente.columns
-                                ):
+                            # ------------------------------------------------
+                            # TOTAL PAGADO DEL MES
+                            # ------------------------------------------------
 
-                                    mensualidades_validas = (
-                                        pd.to_numeric(
-                                            pagos_cliente[
-                                                "valor_mensualidad"
-                                            ],
-                                            errors="coerce"
-                                        )
-                                        .dropna()
+                            total_pagado = 0.0
+
+                            if (
+                                not pagos_mes_actual.empty
+                                and "valor" in pagos_mes_actual.columns
+                            ):
+                                total_pagado = float(
+                                    pd.to_numeric(
+                                        pagos_mes_actual["valor"],
+                                        errors="coerce"
                                     )
-
-
-                                    if (
-                                        not mensualidades_validas.empty
-                                    ):
-
-                                        valor_mensualidad_actual = float(
-                                            mensualidades_validas.iloc[-1]
-                                        )
-
+                                    .fillna(0)
+                                    .sum()
+                                )
 
                             saldo_actual = max(
                                 valor_mensualidad_actual
@@ -2850,51 +2870,41 @@ else:
                                 0.0
                             )
 
+                            if saldo_actual <= 0.001:
+                                estado_pago = "🟢 PAGADO"
+                            elif total_pagado > 0:
+                                estado_pago = "🟡 ABONO"
+                            else:
+                                estado_pago = "🔴 PENDIENTE"
 
-                            estado_pago = (
+                            nombre_mes = hoy.strftime("%B").capitalize()
 
-                                "🟢 PAGADO"
-
-                                if valor_mensualidad_actual > 0
-                                and saldo_actual <= 0
-
-                                else "🟡 ABONO"
-
-                                if total_pagado > 0
-
-                                else "🔴 PENDIENTE"
-
-                            )
-
-
-                            p1, p2, p3, p4 = (
-                                st.columns(4)
-                            )
-
+                            p1, p2, p3, p4 = st.columns(4)
 
                             p1.metric(
                                 "Mensualidad",
                                 f"${valor_mensualidad_actual:,.0f}"
                             )
 
-
                             p2.metric(
-                                "Total Pagado",
+                                "Pagado este mes",
                                 f"${total_pagado:,.0f}"
                             )
-
 
                             p3.metric(
                                 "Saldo Pendiente",
                                 f"${saldo_actual:,.0f}"
                             )
 
-
                             p4.metric(
                                 "Estado",
                                 estado_pago
                             )
 
+                            st.caption(
+                                f"📅 Estado de pagos correspondiente a "
+                                f"{nombre_mes} de {hoy.year}."
+                            )
 
                             # ====================================================
                             # REGISTRAR PAGO
@@ -2902,34 +2912,26 @@ else:
 
                             with st.expander(
                                 "➕ Registrar nuevo pago / abono",
-                                expanded=pagos_cliente.empty
+                                expanded=saldo_actual > 0
                             ):
 
                                 with st.form(
                                     f"form_pago_{id_cliente}"
                                 ):
 
-                                    if (
-                                        valor_mensualidad_actual > 0
-                                    ):
-
-                                        mensualidad_default = float(
-                                            valor_mensualidad_actual
-                                        )
-
-                                    else:
-
-                                        mensualidad_default = 250000.0
-
+                                    mensualidad_default = (
+                                        valor_mensualidad_actual
+                                    )
 
                                     valor_mensualidad = st.number_input(
                                         "Valor de la mensualidad ($):",
                                         min_value=1.0,
-                                        value=mensualidad_default,
+                                        value=float(
+                                            mensualidad_default
+                                        ),
                                         step=5000.0,
                                         format="%.0f",
                                     )
-
 
                                     saldo_para_nuevo_pago = max(
                                         float(
@@ -2939,41 +2941,39 @@ else:
                                         0.0
                                     )
 
-
                                     if total_pagado > 0:
-
                                         st.caption(
-                                            "Pagado hasta ahora: "
+                                            "Pagado este mes: "
                                             f"${total_pagado:,.0f} | "
                                             "Saldo según esta mensualidad: "
                                             f"${saldo_para_nuevo_pago:,.0f}"
                                         )
 
+                                    valor_pago_default = (
+                                        saldo_para_nuevo_pago
+                                        if saldo_para_nuevo_pago > 0
+                                        else 1.0
+                                    )
 
                                     valor_pago = st.number_input(
                                         "Valor del pago / abono ($):",
                                         min_value=1.0,
-                                        value=(
-                                            saldo_para_nuevo_pago
-                                            if saldo_para_nuevo_pago > 0
-                                            else 1.0
+                                        value=float(
+                                            valor_pago_default
                                         ),
                                         step=5000.0,
                                         format="%.0f",
                                     )
-
 
                                     concepto_pago = st.text_input(
                                         "Concepto:",
                                         value="Abono mensualidad"
                                     ).strip()
 
-
                                     guardar_pago = st.form_submit_button(
                                         "💾 Registrar Pago",
                                         use_container_width=True
                                     )
-
 
                                     if guardar_pago:
 
@@ -2987,120 +2987,83 @@ else:
                                                 valor_pago
                                             )
 
-
                                             if valor_mensualidad <= 0:
-
                                                 st.error(
                                                     "❌ La mensualidad debe "
                                                     "ser mayor que cero."
                                                 )
-
                                                 st.stop()
 
-
                                             if valor_pago <= 0:
-
                                                 st.error(
                                                     "❌ El valor del pago "
                                                     "debe ser mayor que cero."
                                                 )
-
                                                 st.stop()
 
-
                                             if not concepto_pago:
-
                                                 concepto_pago = (
                                                     "Abono mensualidad"
                                                 )
-
 
                                             nuevo_total = (
                                                 total_pagado
                                                 + valor_pago
                                             )
 
-
                                             if (
                                                 nuevo_total
-                                                >
-                                                valor_mensualidad
+                                                > valor_mensualidad
                                                 + 0.001
                                             ):
-
                                                 st.error(
                                                     "❌ El abono supera "
                                                     "el saldo pendiente. "
                                                     f"Saldo disponible: "
                                                     f"${saldo_para_nuevo_pago:,.0f}."
                                                 )
-
                                                 st.stop()
-
 
                                             id_pago = (
                                                 f"{id_cliente}_"
                                                 f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
                                             )
 
-
                                             fecha_pago = (
                                                 datetime.today()
-                                                .strftime(
-                                                    "%d-%m-%Y"
-                                                )
+                                                .strftime("%d-%m-%Y")
                                             )
 
-
                                             fila_pago = [
-
                                                 str(id_pago),
-
                                                 str(id_cliente),
-
                                                 str(fecha_pago),
-
                                                 float(valor_pago),
-
                                                 str(concepto_pago),
-
                                                 float(
                                                     valor_mensualidad
                                                 ),
-
                                             ]
 
-
                                             respuesta_pago = requests.post(
-
                                                 URL_API,
-
                                                 json={
                                                     "action":
                                                     "guardar_pago",
-
                                                     "row":
                                                     fila_pago,
                                                 },
-
                                                 timeout=30,
-
                                             )
-
 
                                             respuesta_pago.raise_for_status()
 
-
                                             try:
-
                                                 resultado_pago = (
                                                     respuesta_pago.json()
                                                 )
-
                                             except Exception:
-
                                                 resultado_pago = {}
-
 
                                             if (
                                                 resultado_pago.get(
@@ -3108,7 +3071,6 @@ else:
                                                 )
                                                 == "error"
                                             ):
-
                                                 st.error(
                                                     "❌ Google Apps Script "
                                                     "reportó un error: "
@@ -3119,12 +3081,9 @@ else:
                                                         )
                                                     )
                                                 )
-
                                                 st.stop()
 
-
                                             st.cache_data.clear()
-
 
                                             nuevo_saldo = max(
                                                 valor_mensualidad
@@ -3132,17 +3091,14 @@ else:
                                                 0.0
                                             )
 
-
                                             if nuevo_saldo <= 0.001:
-
                                                 st.success(
                                                     "✅ Pago registrado. "
-                                                    "La mensualidad quedó "
-                                                    "completamente pagada."
+                                                    "La mensualidad de este "
+                                                    "mes quedó completamente "
+                                                    "pagada."
                                                 )
-
                                             else:
-
                                                 st.success(
                                                     "✅ Abono registrado "
                                                     "correctamente. "
@@ -3150,17 +3106,13 @@ else:
                                                     f"${nuevo_saldo:,.0f}."
                                                 )
 
-
                                             st.rerun()
 
-
                                         except Exception as e:
-
                                             st.error(
                                                 "❌ Error registrando "
                                                 f"el pago: {e}"
                                             )
-
 
                             # ====================================================
                             # HISTORIAL DE PAGOS
@@ -3172,93 +3124,60 @@ else:
                                     "#### 📜 Historial de Pagos"
                                 )
 
-
                                 pagos_mostrar = (
                                     pagos_cliente.copy()
                                 )
 
+                                if "_fecha_dt" not in pagos_mostrar.columns:
+                                    pagos_mostrar["_fecha_dt"] = (
+                                        pagos_mostrar["fecha_pago"]
+                                        .apply(parsear_fecha)
+                                        if "fecha_pago" in pagos_mostrar.columns
+                                        else pd.NaT
+                                    )
 
-                                if (
-                                    "fecha_pago"
-                                    in pagos_mostrar.columns
-                                ):
-
-                                    pagos_mostrar[
-                                        "_fecha_dt"
-                                    ] = pd.to_datetime(
-                                        pagos_mostrar[
-                                            "fecha_pago"
+                                pagos_mostrar = (
+                                    pagos_mostrar
+                                    .sort_values(
+                                        by="_fecha_dt",
+                                        ascending=False
+                                    )
+                                    .drop(
+                                        columns=[
+                                            "_fecha_dt"
                                         ],
-                                        format="%d-%m-%Y",
-                                        errors="coerce"
+                                        errors="ignore"
                                     )
-
-
-                                    pagos_mostrar = (
-                                        pagos_mostrar
-                                        .sort_values(
-                                            by="_fecha_dt",
-                                            ascending=False
-                                        )
-                                        .drop(
-                                            columns=[
-                                                "_fecha_dt"
-                                            ]
-                                        )
-                                    )
-
+                                )
 
                                 columnas_pago_mostrar = [
-
                                     columna
-
                                     for columna in [
-
                                         "fecha_pago",
                                         "valor",
                                         "concepto",
                                         "valor_mensualidad",
-
                                     ]
-
-                                    if columna
-                                    in pagos_mostrar.columns
-
+                                    if columna in pagos_mostrar.columns
                                 ]
-
 
                                 tabla_pagos = pagos_mostrar[
                                     columnas_pago_mostrar
                                 ].copy()
 
-
-                                if (
-                                    "valor"
-                                    in tabla_pagos.columns
-                                ):
-
-                                    tabla_pagos[
-                                        "valor"
-                                    ] = (
+                                if "valor" in tabla_pagos.columns:
+                                    tabla_pagos["valor"] = (
                                         pd.to_numeric(
-                                            tabla_pagos[
-                                                "valor"
-                                            ],
+                                            tabla_pagos["valor"],
                                             errors="coerce"
                                         )
                                         .fillna(0)
                                         .map(
-                                            lambda x:
-                                            f"${x:,.0f}"
+                                            lambda x: f"${x:,.0f}"
                                         )
                                     )
 
-
-                                if (
-                                    "valor_mensualidad"
-                                    in tabla_pagos.columns
-                                ):
-
+                                if "valor_mensualidad" in tabla_pagos.columns:
                                     tabla_pagos[
                                         "valor_mensualidad"
                                     ] = (
@@ -3270,32 +3189,21 @@ else:
                                         )
                                         .fillna(0)
                                         .map(
-                                            lambda x:
-                                            f"${x:,.0f}"
+                                            lambda x: f"${x:,.0f}"
                                         )
                                     )
-
 
                                 tabla_pagos = (
                                     tabla_pagos.rename(
                                         columns={
-
-                                            "fecha_pago":
-                                                "Fecha",
-
-                                            "valor":
-                                                "Pago",
-
-                                            "concepto":
-                                                "Concepto",
-
+                                            "fecha_pago": "Fecha",
+                                            "valor": "Pago",
+                                            "concepto": "Concepto",
                                             "valor_mensualidad":
                                                 "Mensualidad",
-
                                         }
                                     )
                                 )
-
 
                                 st.dataframe(
                                     tabla_pagos,
@@ -3303,14 +3211,11 @@ else:
                                     hide_index=True,
                                 )
 
-
                             else:
-
                                 st.info(
                                     "Este cliente todavía "
                                     "no tiene pagos registrados."
                                 )
-
 
                             # ====================================================
                             # HISTORIAL DE CLASES DEL CLIENTE
@@ -4141,13 +4046,9 @@ else:
 
                             historial[
                                 "_fecha_dt"
-                            ] = pd.to_datetime(
-                                historial[
-                                    "fecha_clase"
-                                ],
-                                format="%d-%m-%Y",
-                                errors="coerce"
-                            )
+                            ] = historial[
+                                "fecha_clase"
+                            ].apply(parsear_fecha)
 
 
                             historial = (
