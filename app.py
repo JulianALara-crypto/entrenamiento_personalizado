@@ -14,7 +14,7 @@ from PIL import Image
 # ============================================================
 
 URL_API = (
-    "https://script.google.com/macros/s/AKfycbwMF5jkXXAiw-fDPewAJAm5AOgc78laP0RpGS_W_3i6uvZHvB2raDh9c7eVAq6iOCR2/exec"
+    "https://script.google.com/macros/s/AKfycbxAPOezGCf5xFtQRd5MnGTBLgmNgKZBZBXwIVBy9HXeKyVgXsedtiojuzPlTV5xCHOn/exec"
 )
 
 
