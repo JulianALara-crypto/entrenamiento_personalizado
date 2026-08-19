@@ -3473,29 +3473,36 @@ else:
                                 ]
 
                                 respuesta_config = requests.post(
-                                    URL_API,
-                                    json={
-                                        "action": "guardar_clase",
-                                        "row": fila_config,
-                                    },
-                                    timeout=30,
-                                )
-                                respuesta_config.raise_for_status()
-                                resultado_config = respuesta_config.json()
+    URL_API,
+    json={
+        "action": "guardar_plan",
+        "row": fila_config,
+    },
+    timeout=30,
+)
 
-                                if resultado_config.get("status") == "error":
-                                    st.error(
-                                        "❌ Google Apps Script reportó un error: "
-                                        + str(resultado_config.get("message", "Error desconocido"))
-                                    )
-                                    st.stop()
+respuesta_config.raise_for_status()
+resultado_config = respuesta_config.json()
 
-                                st.cache_data.clear()
-                                st.success(
-                                    "✅ Configuración del plan guardada correctamente."
-                                )
-                                st.rerun()
+if resultado_config.get("status") == "error":
+    st.error(
+        "❌ Google Apps Script reportó un error: "
+        + str(
+            resultado_config.get(
+                "message",
+                "Error desconocido"
+            )
+        )
+    )
+    st.stop()
 
+st.cache_data.clear()
+
+st.success(
+    "✅ Configuración del plan guardada correctamente."
+)
+
+st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Error guardando el plan: {e}")
 
