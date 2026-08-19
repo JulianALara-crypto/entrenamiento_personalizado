@@ -674,11 +674,11 @@ def cargar_bd():
                 columns=[
                     "id_clase",
                     "cedula",
+                    "nombre_completo",
                     "fecha_clase",
-                    "plan",
-                    "clases_contratadas",
-                    "observacion",
-                    "fecha_registro",
+                    "tipo_plan",
+                    "periodo",
+                    "estado",
                 ]
             )
 
@@ -768,14 +768,14 @@ def cargar_bd():
 
         if (
             not df_c.empty
-            and "clases_contratadas" in df_c.columns
+            and "periodo" in df_c.columns
         ):
 
             df_c[
-                "clases_contratadas"
+                "periodo"
             ] = pd.to_numeric(
                 df_c[
-                    "clases_contratadas"
+                    "periodo"
                 ],
                 errors="coerce"
             )
@@ -1194,15 +1194,7 @@ def obtener_resumen_clases(
     df_clases,
     cedula
 ):
-    """
-    Obtiene el estado del plan actual y las clases realmente tomadas.
-
-    Regla importante:
-    - Una fila con fecha_clase vacía = configuración de un nuevo plan.
-    - Una fila con fecha_clase = clase realmente tomada.
-    - Al configurar un nuevo plan, las clases anteriores dejan de contar
-      para el nuevo ciclo.
-    """
+    # Obtiene el estado del ciclo actual de clases.
 
     resultado = {
         "plan": "Sin plan registrado",
@@ -1229,11 +1221,16 @@ def obtener_resumen_clases(
     if registros.empty:
         return resultado
 
-    # Mantener el orden original de Google Sheets.
     registros["_orden"] = range(len(registros))
 
-    if "fecha_clase" not in registros.columns:
-        registros["fecha_clase"] = ""
+    for columna, valor in {
+        "fecha_clase": "",
+        "tipo_plan": "",
+        "periodo": pd.NA,
+        "estado": "",
+    }.items():
+        if columna not in registros.columns:
+            registros[columna] = valor
 
     fechas_texto = (
         registros["fecha_clase"]
@@ -1242,88 +1239,67 @@ def obtener_resumen_clases(
         .str.strip()
     )
 
-    registros["_es_config"] = fechas_texto == ""
+    estados_texto = (
+        registros["estado"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
 
-    # Buscar la última configuración de plan.
-    configuraciones = registros[
-        registros["_es_config"]
-    ].copy()
+    registros["_es_config"] = (
+        (fechas_texto == "")
+        & (
+            estados_texto.eq("configuración del plan")
+            | estados_texto.eq("configuracion del plan")
+            | estados_texto.eq("")
+        )
+    )
 
+    registros["_es_tomada"] = (
+        (fechas_texto != "")
+        & (
+            estados_texto.eq("tomada")
+            | estados_texto.eq("clase tomada")
+            | estados_texto.eq("")
+        )
+    )
+
+    configuraciones = registros[registros["_es_config"]].copy()
     indice_config = None
 
     if not configuraciones.empty:
-        indice_config = int(
-            configuraciones["_orden"].iloc[-1]
-        )
-
+        indice_config = int(configuraciones["_orden"].iloc[-1])
         config = configuraciones.iloc[-1]
 
-        if "plan" in config.index:
-            plan_config = str(
-                config["plan"]
-            ).strip()
+        plan_config = str(config.get("tipo_plan", "")).strip()
+        if plan_config:
+            resultado["plan"] = plan_config
 
-            if plan_config:
-                resultado["plan"] = plan_config
+        cantidad_config = pd.to_numeric(
+            config.get("periodo", pd.NA),
+            errors="coerce"
+        )
+        if not pd.isna(cantidad_config):
+            resultado["clases_contratadas"] = int(cantidad_config)
 
-        if "clases_contratadas" in config.index:
-            cantidad_config = pd.to_numeric(
-                config["clases_contratadas"],
-                errors="coerce"
-            )
-
-            if not pd.isna(cantidad_config):
-                resultado["clases_contratadas"] = int(
-                    cantidad_config
-                )
-
-    # Si nunca hubo configuración explícita, usar el último registro
-    # con fecha como referencia histórica.
-    if indice_config is None:
-        registros_tomados = registros[
-            ~registros["_es_config"]
-        ].copy()
-
-        if not registros_tomados.empty:
-            ultimo = registros_tomados.iloc[-1]
-
-            if "plan" in ultimo.index:
-                plan_ultimo = str(
-                    ultimo["plan"]
-                ).strip()
-
-                if plan_ultimo:
-                    resultado["plan"] = plan_ultimo
-
-            if "clases_contratadas" in ultimo.index:
-                cantidad_ultimo = pd.to_numeric(
-                    ultimo["clases_contratadas"],
-                    errors="coerce"
-                )
-
-                if not pd.isna(cantidad_ultimo):
-                    resultado["clases_contratadas"] = int(
-                        cantidad_ultimo
-                    )
-
-    # Solo cuentan las clases posteriores a la última configuración.
     if indice_config is not None:
         registros_tomados = registros[
             (registros["_orden"] > indice_config)
-            & (~registros["_es_config"])
+            & registros["_es_tomada"]
         ].copy()
     else:
-        registros_tomados = registros[
-            ~registros["_es_config"]
-        ].copy()
+        registros_tomados = registros[registros["_es_tomada"]].copy()
 
-    resultado["clases_tomadas"] = len(
-        registros_tomados
-    )
+        if not registros_tomados.empty and resultado["clases_contratadas"] <= 0:
+            ultimo = registros_tomados.iloc[-1]
+            plan_ultimo = str(ultimo.get("tipo_plan", "")).strip()
+            if plan_ultimo:
+                resultado["plan"] = plan_ultimo
 
+    resultado["clases_tomadas"] = len(registros_tomados)
     resultado["clases_restantes"] = max(
-        resultado["clases_contratadas"]
-        - resultado["clases_tomadas"],
+        resultado["clases_contratadas"] - resultado["clases_tomadas"],
         0
     )
 
@@ -1336,19 +1312,12 @@ def obtener_resumen_clases(
             100
         )
 
-    # Limpiar columnas internas antes de devolver.
-    registros_tomados = registros_tomados.drop(
-        columns=[
-            "_orden",
-            "_es_config"
-        ],
+    resultado["registros"] = registros_tomados.drop(
+        columns=["_orden", "_es_config", "_es_tomada"],
         errors="ignore"
     )
 
-    resultado["registros"] = registros_tomados
-
     return resultado
-
 
 # ============================================================
 # MOSTRAR RESUMEN DE CLASES
@@ -2518,12 +2487,10 @@ else:
                     columna
 
                     for columna in [
-
                         "fecha_clase",
-                        "plan",
-                        "clases_contratadas",
-                        "observacion",
-
+                        "tipo_plan",
+                        "periodo",
+                        "estado",
                     ]
 
                     if columna in tabla.columns
@@ -2541,14 +2508,14 @@ else:
                         "fecha_clase":
                             "Fecha de Clase",
 
-                        "plan":
+                        "tipo_plan":
                             "Plan",
 
-                        "clases_contratadas":
-                            "Clases Contratadas",
+                        "periodo":
+                            "Periodo",
 
-                        "observacion":
-                            "Observación",
+                        "estado":
+                            "Estado",
                     }
                 )
 
@@ -3256,13 +3223,11 @@ else:
                                     columna
 
                                     for columna in [
-
-                                        "fecha_clase",
-                                        "plan",
-                                        "clases_contratadas",
-                                        "observacion",
-
-                                    ]
+                        "fecha_clase",
+                        "tipo_plan",
+                        "periodo",
+                        "estado",
+                    ]
 
                                     if columna
                                     in clases_mostrar.columns
@@ -3284,14 +3249,14 @@ else:
                                             "fecha_clase":
                                                 "Fecha Clase",
 
-                                            "plan":
+                                            "tipo_plan":
                                                 "Plan",
 
-                                            "clases_contratadas":
-                                                "Clases Contratadas",
+                                            "periodo":
+                                                "Periodo",
 
-                                            "observacion":
-                                                "Observación",
+                                            "estado":
+                                                "Estado",
 
                                         }
                                     )
@@ -3409,310 +3374,146 @@ else:
                         "🏋️ Control de Clases Personalizadas"
                     )
 
-
                     st.info(
-                        "Aquí el ADMIN registra manualmente "
-                        "cada clase realmente tomada. "
-                        "No se generan clases automáticamente."
+                        "Aquí el ADMIN configura el plan y registra "
+                        "manualmente cada clase realmente tomada."
                     )
-
-
-                    # ------------------------------------------------
-                    # SELECCIÓN DEL CLIENTE
-                    # ------------------------------------------------
 
                     cliente_clase_sel = st.selectbox(
-
                         "👤 Seleccionar Cliente:",
-
-                        clientes[
-                            "cedula"
-                        ].astype(str)
+                        clientes["cedula"].astype(str)
                         + " - "
-                        + clientes[
-                            "nombre_completo"
-                        ].astype(str),
-
-                        key="selector_cliente_clases"
-
+                        + clientes["nombre_completo"].astype(str),
+                        key="selector_cliente_clases",
                     )
-
 
                     id_cliente_clases = (
-                        cliente_clase_sel
-                        .split(" - ")[0]
-                        .strip()
+                        cliente_clase_sel.split(" - ")[0].strip()
                     )
-
-
                     nombre_cliente_clases = (
-                        cliente_clase_sel
-                        .split(" - ", 1)[1]
+                        cliente_clase_sel.split(" - ", 1)[1]
                     )
 
-
-                    st.markdown(
-                        f"### 👤 {nombre_cliente_clases}"
-                    )
-
-
-                    # ------------------------------------------------
-                    # RESUMEN ACTUAL
-                    # ------------------------------------------------
+                    st.markdown(f"### 👤 {nombre_cliente_clases}")
 
                     mostrar_resumen_clases(
                         df_clases,
                         id_cliente_clases
                     )
 
-
-                    resumen_actual = (
-                        obtener_resumen_clases(
-                            df_clases,
-                            id_cliente_clases
-                        )
+                    resumen_actual = obtener_resumen_clases(
+                        df_clases,
+                        id_cliente_clases
                     )
-
 
                     # ------------------------------------------------
                     # CONFIGURACIÓN DEL PLAN
                     # ------------------------------------------------
+                    st.markdown("---")
+                    st.markdown("#### ⚙️ Configuración del plan")
 
-                    st.markdown(
-                        "---"
-                    )
-
-                    st.markdown(
-                        "#### ⚙️ Configuración del plan"
-                    )
-
-
-                    with st.form(
-                        f"form_config_clases_{id_cliente_clases}"
-                    ):
-
+                    with st.form(f"form_config_clases_{id_cliente_clases}"):
                         col_plan1, col_plan2 = st.columns(2)
 
-
                         with col_plan1:
-
+                            opciones_plan = [
+                                "Premium",
+                                "Personalizado",
+                                "Otro",
+                            ]
+                            plan_actual = resumen_actual["plan"]
                             plan_cliente = st.selectbox(
                                 "Plan:",
-                                [
-                                    "Premium",
-                                    "Personalizado",
-                                    "Otro",
-                                ],
+                                opciones_plan,
                                 index=(
-                                    0
-                                    if resumen_actual[
-                                        "plan"
-                                    ]
-                                    == "Sin plan registrado"
-                                    else
-                                    [
-                                        "Premium",
-                                        "Personalizado",
-                                        "Otro",
-                                    ].index(
-                                        resumen_actual[
-                                            "plan"
-                                        ]
-                                    )
-                                    if resumen_actual[
-                                        "plan"
-                                    ]
-                                    in [
-                                        "Premium",
-                                        "Personalizado",
-                                        "Otro",
-                                    ]
+                                    opciones_plan.index(plan_actual)
+                                    if plan_actual in opciones_plan
                                     else 0
-                                )
+                                ),
                             )
 
-
                         with col_plan2:
-
                             clases_contratadas = st.number_input(
                                 "Número de clases contratadas:",
                                 min_value=1,
                                 max_value=500,
                                 value=(
-                                    resumen_actual[
-                                        "clases_contratadas"
-                                    ]
-                                    if resumen_actual[
-                                        "clases_contratadas"
-                                    ] > 0
+                                    resumen_actual["clases_contratadas"]
+                                    if resumen_actual["clases_contratadas"] > 0
                                     else 20
                                 ),
                                 step=1,
                             )
 
-
                         st.caption(
-                            "Ejemplo: el plan Premium puede "
-                            "tener 20 clases disponibles. "
-                            "Las clases solo se descuentan "
-                            "cuando el ADMIN registra una fecha."
+                            "La configuración inicia un nuevo ciclo. "
+                            "Las clases anteriores dejan de contar para este nuevo plan."
                         )
-
 
                         guardar_config_plan = st.form_submit_button(
                             "💾 Guardar configuración del plan",
-                            use_container_width=True
+                            use_container_width=True,
                         )
 
-
                         if guardar_config_plan:
-
                             try:
-
-                                # ------------------------------------------------
-                                # Para configurar el plan sin crear una clase,
-                                # usamos una fecha vacía.
-                                # ------------------------------------------------
-
                                 id_config = (
                                     f"{id_cliente_clases}_PLAN_"
                                     f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
                                 )
 
-
                                 fila_config = [
-
                                     str(id_config),
-
                                     str(id_cliente_clases),
-
+                                    str(nombre_cliente_clases),
                                     "",
-
                                     str(plan_cliente),
-
-                                    int(
-                                        clases_contratadas
-                                    ),
-
+                                    int(clases_contratadas),
                                     "Configuración del plan",
-
-                                    datetime.today().strftime(
-                                        "%d-%m-%Y"
-                                    ),
-
                                 ]
 
-
                                 respuesta_config = requests.post(
-
                                     URL_API,
-
                                     json={
-                                        "action":
-                                        "guardar_clase",
-
-                                        "row":
-                                        fila_config,
+                                        "action": "guardar_clase",
+                                        "row": fila_config,
                                     },
-
                                     timeout=30,
-
                                 )
-
-
                                 respuesta_config.raise_for_status()
+                                resultado_config = respuesta_config.json()
 
-
-                                try:
-
-                                    resultado_config = (
-                                        respuesta_config.json()
-                                    )
-
-                                except Exception:
-
-                                    resultado_config = {}
-
-
-                                if (
-                                    resultado_config.get(
-                                        "status"
-                                    )
-                                    == "error"
-                                ):
-
+                                if resultado_config.get("status") == "error":
                                     st.error(
-                                        "❌ Google Apps Script "
-                                        "reportó un error: "
-                                        + str(
-                                            resultado_config.get(
-                                                "message",
-                                                "Error desconocido"
-                                            )
-                                        )
+                                        "❌ Google Apps Script reportó un error: "
+                                        + str(resultado_config.get("message", "Error desconocido"))
                                     )
-
                                     st.stop()
 
-
                                 st.cache_data.clear()
-
-
                                 st.success(
-                                    "✅ Configuración del plan "
-                                    "guardada correctamente."
+                                    "✅ Configuración del plan guardada correctamente."
                                 )
-
-
                                 st.rerun()
 
-
                             except Exception as e:
-
-                                st.error(
-                                    "❌ Error guardando "
-                                    f"el plan: {e}"
-                                )
-
+                                st.error(f"❌ Error guardando el plan: {e}")
 
                     # ------------------------------------------------
-                    # REGISTRAR CLASE
+                    # REGISTRAR CLASE TOMADA
                     # ------------------------------------------------
-
-                    st.markdown(
-                        "---"
-                    )
-
-                    st.markdown(
-                        "#### 📅 Registrar clase tomada"
-                    )
-
+                    st.markdown("---")
+                    st.markdown("#### 📅 Registrar clase tomada")
 
                     if (
-                        resumen_actual[
-                            "clases_contratadas"
-                        ]
-                        > 0
-                        and
-                        resumen_actual[
-                            "clases_tomadas"
-                        ]
-                        >=
-                        resumen_actual[
-                            "clases_contratadas"
-                        ]
+                        resumen_actual["clases_contratadas"] > 0
+                        and resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]
                     ):
-
                         st.warning(
-                            "⚠️ Este cliente ya utilizó "
-                            "todas las clases contratadas."
+                            "⚠️ Este cliente ya utilizó todas las clases contratadas."
                         )
 
-
-                    with st.form(
-                        f"form_registro_clase_{id_cliente_clases}"
-                    ):
-
+                    with st.form(f"form_registro_clase_{id_cliente_clases}"):
                         fecha_clase = st.date_input(
                             "📅 Fecha de la clase tomada:",
                             value=date.today(),
@@ -3720,409 +3521,166 @@ else:
                             format="DD-MM-YYYY",
                         )
 
-
-                        observacion_clase = st.text_input(
-                            "Observación de la clase:",
-                            placeholder=(
-                                "Ej: Entrenamiento de pierna, "
-                                "sesión personalizada, etc."
-                            )
-                        ).strip()
-
-
                         registrar_clase = st.form_submit_button(
                             "🏋️ Registrar Clase Tomada",
-                            use_container_width=True
+                            use_container_width=True,
                         )
 
-
                         if registrar_clase:
-
                             try:
-
-                                # ------------------------------------------------
-                                # VALIDAR PLAN
-                                # ------------------------------------------------
-
-                                if (
-                                    resumen_actual[
-                                        "clases_contratadas"
-                                    ]
-                                    <= 0
-                                ):
-
+                                if resumen_actual["clases_contratadas"] <= 0:
                                     st.error(
-                                        "❌ Primero debes configurar "
-                                        "el plan y el número de clases "
-                                        "contratadas."
+                                        "❌ Primero debes configurar el plan y el número de clases contratadas."
                                     )
-
                                     st.stop()
 
-
-                                # ------------------------------------------------
-                                # VALIDAR CUPO
-                                # ------------------------------------------------
-
-                                if (
-                                    resumen_actual[
-                                        "clases_tomadas"
-                                    ]
-                                    >=
-                                    resumen_actual[
-                                        "clases_contratadas"
-                                    ]
-                                ):
-
+                                if resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]:
                                     st.error(
-                                        "❌ El cliente ya utilizó "
-                                        "todas las clases de su plan."
+                                        "❌ El cliente ya utilizó todas las clases de su plan."
                                     )
-
                                     st.stop()
 
-
-                                # ------------------------------------------------
-                                # FECHA
-                                # ------------------------------------------------
-
-                                fecha_clase_str = (
-                                    fecha_clase.strftime(
-                                        "%d-%m-%Y"
-                                    )
-                                )
-
-
-                                # ------------------------------------------------
-                                # EVITAR DUPLICADOS
-                                # ------------------------------------------------
-
-                                clases_cliente = (
-                                    resumen_actual[
-                                        "registros"
-                                    ]
-                                )
-
+                                fecha_clase_str = fecha_clase.strftime("%d-%m-%Y")
+                                clases_cliente = resumen_actual["registros"]
 
                                 if (
                                     not clases_cliente.empty
-                                    and
-                                    "fecha_clase"
-                                    in clases_cliente.columns
+                                    and "fecha_clase" in clases_cliente.columns
                                 ):
-
                                     fechas_existentes = (
-                                        clases_cliente[
-                                            "fecha_clase"
-                                        ]
+                                        clases_cliente["fecha_clase"]
+                                        .apply(formatear_fecha)
                                         .astype(str)
                                         .str.strip()
                                         .tolist()
                                     )
-
-
-                                    if (
-                                        fecha_clase_str
-                                        in fechas_existentes
-                                    ):
-
+                                    if fecha_clase_str in fechas_existentes:
                                         st.error(
-                                            "❌ Ya existe una clase "
-                                            "registrada para este cliente "
+                                            "❌ Ya existe una clase registrada para este cliente "
                                             f"el {fecha_clase_str}."
                                         )
-
                                         st.stop()
 
-
-                                # ------------------------------------------------
-                                # GENERAR ID
-                                # ------------------------------------------------
-
                                 id_clase = (
-                                    f"{id_cliente_clases}_"
+                                    f"{id_cliente_clases}_CLASE_"
                                     f"{fecha_clase.strftime('%Y%m%d')}_"
                                     f"{datetime.today().strftime('%H%M%S%f')}"
                                 )
 
-
-                                # ------------------------------------------------
-                                # FILA
-                                # ------------------------------------------------
-
                                 fila_clase = [
-
                                     str(id_clase),
-
                                     str(id_cliente_clases),
-
+                                    str(nombre_cliente_clases),
                                     str(fecha_clase_str),
-
-                                    str(
-                                        resumen_actual[
-                                            "plan"
-                                        ]
-                                    ),
-
-                                    int(
-                                        resumen_actual[
-                                            "clases_contratadas"
-                                        ]
-                                    ),
-
-                                    (
-                                        observacion_clase
-                                        if observacion_clase
-                                        else
-                                        "Clase personalizada"
-                                    ),
-
-                                    datetime.today().strftime(
-                                        "%d-%m-%Y"
-                                    ),
-
+                                    str(resumen_actual["plan"]),
+                                    "",
+                                    "Tomada",
                                 ]
 
-
-                                # ------------------------------------------------
-                                # ENVIAR A APPS SCRIPT
-                                # ------------------------------------------------
-
                                 respuesta_clase = requests.post(
-
                                     URL_API,
-
                                     json={
-                                        "action":
-                                        "guardar_clase",
-
-                                        "row":
-                                        fila_clase,
+                                        "action": "guardar_clase",
+                                        "row": fila_clase,
                                     },
-
                                     timeout=30,
-
                                 )
-
-
                                 respuesta_clase.raise_for_status()
+                                resultado_clase = respuesta_clase.json()
 
-
-                                try:
-
-                                    resultado_clase = (
-                                        respuesta_clase.json()
-                                    )
-
-                                except Exception:
-
-                                    resultado_clase = {}
-
-
-                                if (
-                                    resultado_clase.get(
-                                        "status"
-                                    )
-                                    == "error"
-                                ):
-
+                                if resultado_clase.get("status") == "error":
                                     st.error(
-                                        "❌ Google Apps Script "
-                                        "reportó un error: "
-                                        + str(
-                                            resultado_clase.get(
-                                                "message",
-                                                "Error desconocido"
-                                            )
-                                        )
+                                        "❌ Google Apps Script reportó un error: "
+                                        + str(resultado_clase.get("message", "Error desconocido"))
                                     )
-
                                     st.stop()
-
 
                                 st.cache_data.clear()
 
-
-                                clases_nuevas = (
-                                    resumen_actual[
-                                        "clases_tomadas"
-                                    ]
-                                    + 1
+                                clases_nuevas = int(
+                                    resultado_clase.get(
+                                        "clases_tomadas",
+                                        resumen_actual["clases_tomadas"] + 1,
+                                    )
+                                )
+                                clases_restantes_nuevas = int(
+                                    resultado_clase.get(
+                                        "clases_restantes",
+                                        max(
+                                            resumen_actual["clases_contratadas"] - clases_nuevas,
+                                            0,
+                                        ),
+                                    )
+                                )
+                                porcentaje_nuevo = float(
+                                    resultado_clase.get(
+                                        "porcentaje",
+                                        (
+                                            clases_nuevas
+                                            / resumen_actual["clases_contratadas"]
+                                        ) * 100,
+                                    )
                                 )
 
-
-                                clases_restantes_nuevas = max(
-                                    resumen_actual[
-                                        "clases_contratadas"
-                                    ]
-                                    -
-                                    clases_nuevas,
-                                    0
-                                )
-
-
-                                porcentaje_nuevo = (
-                                    clases_nuevas
-                                    /
-                                    resumen_actual[
-                                        "clases_contratadas"
-                                    ]
-                                ) * 100
-
-
-                                st.success(
-                                    "✅ Clase registrada correctamente."
-                                )
-
-
+                                st.success("✅ Clase registrada correctamente.")
                                 c1, c2, c3 = st.columns(3)
-
-
-                                c1.metric(
-                                    "Clases tomadas",
-                                    clases_nuevas
-                                )
-
-
-                                c2.metric(
-                                    "Clases restantes",
-                                    clases_restantes_nuevas
-                                )
-
-
-                                c3.metric(
-                                    "% utilizado",
-                                    f"{min(porcentaje_nuevo, 100):.1f}%"
-                                )
-
-
+                                c1.metric("Clases tomadas", clases_nuevas)
+                                c2.metric("Clases restantes", clases_restantes_nuevas)
+                                c3.metric("% utilizado", f"{min(porcentaje_nuevo, 100):.1f}%")
                                 st.rerun()
 
-
                             except Exception as e:
-
-                                st.error(
-                                    "❌ Error registrando "
-                                    f"la clase: {e}"
-                                )
-
+                                st.error(f"❌ Error registrando la clase: {e}")
 
                     # ------------------------------------------------
                     # HISTORIAL DE CLASES
                     # ------------------------------------------------
+                    st.markdown("---")
+                    st.markdown("#### 📋 Historial de clases tomadas")
 
-                    st.markdown(
-                        "---"
+                    resumen_historial = obtener_resumen_clases(
+                        df_clases,
+                        id_cliente_clases
                     )
-
-                    st.markdown(
-                        "#### 📋 Historial de clases tomadas"
-                    )
-
-
-                    resumen_historial = (
-                        obtener_resumen_clases(
-                            df_clases,
-                            id_cliente_clases
-                        )
-                    )
-
-
-                    registros_historial = (
-                        resumen_historial[
-                            "registros"
-                        ]
-                    )
-
+                    registros_historial = resumen_historial["registros"]
 
                     if not registros_historial.empty:
-
-                        historial = (
-                            registros_historial.copy()
-                        )
-
+                        historial = registros_historial.copy()
 
                         if "fecha_clase" in historial.columns:
-
-                            historial[
-                                "_fecha_dt"
-                            ] = historial[
-                                "fecha_clase"
-                            ].apply(parsear_fecha)
-
-
-                            historial = (
-                                historial
-                                .sort_values(
-                                    "_fecha_dt",
-                                    ascending=False
-                                )
-                            )
-
+                            historial["_fecha_dt"] = historial["fecha_clase"].apply(parsear_fecha)
+                            historial = historial.sort_values("_fecha_dt", ascending=False)
 
                         columnas_historial = [
-
                             columna
-
                             for columna in [
-
                                 "fecha_clase",
-                                "plan",
-                                "clases_contratadas",
-                                "observacion",
-                                "fecha_registro",
-
+                                "tipo_plan",
+                                "periodo",
+                                "estado",
                             ]
-
-                            if columna
-                            in historial.columns
-
+                            if columna in historial.columns
                         ]
 
-
-                        historial = historial[
-                            columnas_historial
-                        ].copy()
-
-
-                        historial = (
-                            historial.rename(
-                                columns={
-
-                                    "fecha_clase":
-                                        "Fecha Clase",
-
-                                    "plan":
-                                        "Plan",
-
-                                    "clases_contratadas":
-                                        "Clases Contratadas",
-
-                                    "observacion":
-                                        "Observación",
-
-                                    "fecha_registro":
-                                        "Registrado",
-
-                                }
-                            )
+                        historial = historial[columnas_historial].copy()
+                        historial = historial.rename(
+                            columns={
+                                "fecha_clase": "Fecha Clase",
+                                "tipo_plan": "Plan",
+                                "periodo": "Periodo",
+                                "estado": "Estado",
+                            }
                         )
-
 
                         st.dataframe(
                             historial.astype(str),
                             use_container_width=True,
                             hide_index=True,
                         )
-
-
                     else:
-
                         st.info(
-                            "Este cliente todavía "
-                            "no tiene clases registradas."
+                            "Este cliente todavía no tiene clases registradas."
                         )
-
 
             else:
 
