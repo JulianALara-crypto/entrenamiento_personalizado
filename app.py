@@ -23,7 +23,7 @@ URL_API = (
 # ============================================================
 
 BASE_DIR = os.path.dirname(
-    os.path.abspath(_file_)
+    os.path.abspath(__file__)
 )
 
 ruta_logo = os.path.join(
