@@ -1475,17 +1475,18 @@ else:
                             try:
                                 id_config = (
                                     f"{id_cliente_clases}PLAN"
-                                    f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                    fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')}"
                                 )
 
                                 fila_config = [
-                                    str(id_config),
                                     str(id_cliente_clases),
                                     str(nombre_cliente_clases),
-                                    "",
                                     str(plan_cliente),
-                                    int(clases_contratadas),
+                                    fecha_hoy_str,
+                                    "",
+                                    "Activo",
                                     "Configuración del plan",
+                                    int(clases_contratadas),
                                 ]
 
                                 respuesta_config = requests.post(
