@@ -653,7 +653,23 @@ def mostrar_graficos_evolucion(df_filtrado):
 # RESUMEN DE CLASES
 # ============================================================
 
+@st.cache_data(ttl=10)
+def cargar_solo_planes():
+    """Función auxiliar para descargar la hoja 'Planes' en tiempo real."""
+    try:
+        res = requests.get(URL_API, timeout=30).json()
+        planes_raw = res.get("planes", [])
+        if len(planes_raw) > 1:
+            col_pl = [str(c).strip().lower() for c in planes_raw[0]]
+            df_pl = pd.DataFrame(planes_raw[1:], columns=col_pl)
+            return df_pl.loc[:, ~df_pl.columns.duplicated()]
+        return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+
 def obtener_resumen_clases(df_clases, cedula):
+    """Calcula el progreso de clases leyendo la hoja Planes y cruzándola con Clases."""
     resultado = {
         "plan": "Sin plan registrado",
         "clases_contratadas": 0,
@@ -663,93 +679,47 @@ def obtener_resumen_clases(df_clases, cedula):
         "registros": pd.DataFrame(),
     }
 
-    if df_clases is None or df_clases.empty or "cedula" not in df_clases.columns:
+    if not cedula:
         return resultado
 
-    cedula = normalizar_cedula(cedula)
-    registros = df_clases[
-        df_clases["cedula"].apply(normalizar_cedula) == cedula
-    ].copy()
+    cedula_str = normalizar_cedula(cedula)
+    
+    # 1. Traer los datos reales de la pestaña Planes
+    df_planes = cargar_solo_planes()
 
-    if registros.empty:
-        return resultado
+    # 2. Buscar el plan ACTIVO del cliente
+    if not df_planes.empty and "cedula" in df_planes.columns:
+        df_planes["_cedula_norm"] = df_planes["cedula"].apply(normalizar_cedula)
+        planes_cliente = df_planes[
+            (df_planes["_cedula_norm"] == cedula_str) & 
+            (df_planes["estado"].astype(str).str.strip().str.lower() == "activo")
+        ]
+        if not planes_cliente.empty:
+            plan_activo = planes_cliente.iloc[-1]
+            resultado["plan"] = str(plan_activo.get("tipo_plan", ""))
+            resultado["clases_contratadas"] = int(pd.to_numeric(plan_activo.get("clases_incluidas", 0), errors="coerce"))
 
-    registros["_orden"] = range(len(registros))
-
-    for columna, valor in {
-        "fecha_clase": "",
-        "tipo_plan": "",
-        "periodo": pd.NA,
-        "estado": "",
-    }.items():
-        if columna not in registros.columns:
-            registros[columna] = valor
-
-    fechas_texto = registros["fecha_clase"].fillna("").astype(str).str.strip()
-    estados_texto = registros["estado"].fillna("").astype(str).str.strip().str.lower()
-
-    registros["_es_config"] = (
-        (fechas_texto == "")
-        & (
-            estados_texto.eq("configuración del plan")
-            | estados_texto.eq("configuracion del plan")
-            | estados_texto.eq("")
-        )
-    )
-
-    registros["_es_tomada"] = (
-        (fechas_texto != "")
-        & (
-            estados_texto.eq("tomada")
-            | estados_texto.eq("clase tomada")
-            | estados_texto.eq("")
-        )
-    )
-
-    configuraciones = registros[registros["_es_config"]].copy()
-    indice_config = None
-
-    if not configuraciones.empty:
-        indice_config = int(configuraciones["_orden"].iloc[-1])
-        config = configuraciones.iloc[-1]
-
-        plan_config = str(config.get("tipo_plan", "")).strip()
-        if plan_config:
-            resultado["plan"] = plan_config
-
-        cantidad_config = pd.to_numeric(config.get("periodo", pd.NA), errors="coerce")
-        if not pd.isna(cantidad_config):
-            resultado["clases_contratadas"] = int(cantidad_config)
-
-    if indice_config is not None:
-        registros_tomados = registros[
-            (registros["_orden"] > indice_config) & registros["_es_tomada"]
+    # 3. Contar las clases que ya han sido tomadas en la pestaña Clases
+    if df_clases is not None and not df_clases.empty and "cedula" in df_clases.columns:
+        df_clases["_cedula_norm"] = df_clases["cedula"].apply(normalizar_cedula)
+        
+        # Asegurarnos de que exista la columna estado
+        if "estado" not in df_clases.columns:
+            df_clases["estado"] = "tomada"
+            
+        registros = df_clases[
+            (df_clases["_cedula_norm"] == cedula_str) &
+            (df_clases["estado"].astype(str).str.strip().str.lower() == "tomada")
         ].copy()
-    else:
-        registros_tomados = registros[registros["_es_tomada"]].copy()
+        
+        resultado["clases_tomadas"] = len(registros)
+        resultado["registros"] = registros.drop(columns=["_cedula_norm"], errors="ignore")
 
-    if not registros_tomados.empty and resultado["clases_contratadas"] <= 0:
-        ultimo = registros_tomados.iloc[-1]
-        plan_ultimo = str(ultimo.get("tipo_plan", "")).strip()
-        if plan_ultimo:
-            resultado["plan"] = plan_ultimo
-
-    resultado["clases_tomadas"] = len(registros_tomados)
-    resultado["clases_restantes"] = max(
-        resultado["clases_contratadas"] - resultado["clases_tomadas"],
-        0
-    )
-
+    # 4. Calcular los totales y porcentajes
+    resultado["clases_restantes"] = max(resultado["clases_contratadas"] - resultado["clases_tomadas"], 0)
+    
     if resultado["clases_contratadas"] > 0:
-        resultado["porcentaje"] = min(
-            (resultado["clases_tomadas"] / resultado["clases_contratadas"]) * 100,
-            100
-        )
-
-    resultado["registros"] = registros_tomados.drop(
-        columns=["_orden", "_es_config", "_es_tomada"],
-        errors="ignore"
-    )
+        resultado["porcentaje"] = min((resultado["clases_tomadas"] / resultado["clases_contratadas"]) * 100, 100)
 
     return resultado
 
