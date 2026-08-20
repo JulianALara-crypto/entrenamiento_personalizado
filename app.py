@@ -1473,20 +1473,19 @@ else:
 
                         if guardar_config_plan:
                             try:
-                                id_config = (
-                                    f"{id_cliente_clases}PLAN"
-                                    fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
-                                )
+                                # Obtenemos la fecha de hoy para el inicio del plan
+                                fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
 
+                                # Construimos la fila EXACTAMENTE como la espera tu .js
                                 fila_config = [
-                                    str(id_cliente_clases),
-                                    str(nombre_cliente_clases),
-                                    str(plan_cliente),
-                                    fecha_hoy_str,
-                                    "",
-                                    "Activo",
-                                    "Configuración del plan",
-                                    int(clases_contratadas),
+                                    str(id_cliente_clases),         # 0: Cédula
+                                    str(nombre_cliente_clases),     # 1: Nombre
+                                    str(plan_cliente),              # 2: Tipo de Plan
+                                    fecha_hoy_str,                  # 3: Fecha Inicio
+                                    "",                             # 4: Fecha Fin (vacío)
+                                    "Activo",                       # 5: Estado
+                                    "Configuración del plan",       # 6: Observaciones
+                                    int(clases_contratadas),        # 7: Clases Incluidas
                                 ]
 
                                 respuesta_config = requests.post(
