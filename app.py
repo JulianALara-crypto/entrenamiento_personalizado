@@ -1475,7 +1475,7 @@ else:
                             try:
                                 id_config = (
                                     f"{id_cliente_clases}PLAN"
-                                    fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')}"
+                                    fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
                                 )
 
                                 fila_config = [
