@@ -162,7 +162,7 @@ if icono_pestana is not None:
 
 
 # ============================================================
-# CALCULAR MÉTRICAS (CORREGIDO Y ESTABILIZADO)
+# CALCULAR MÉTRICAS (CORREGIDO Y AJUSTADO MATEMÁTICAMENTE)
 # ============================================================
 
 def calcular_metricas(
@@ -956,7 +956,7 @@ else:
 
                         if imc < 10 or imc > 60:
                             st.error(
-                                f"⚠️ El IMC calculated ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
+                                f"⚠️ El IMC calculado ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
                             )
                             st.stop()
 
@@ -1442,10 +1442,8 @@ else:
 
                         if guardar_config_plan:
                             try:
-                                # Obtenemos la fecha de hoy para el inicio del plan
                                 fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
 
-                                # Construimos la fila EXACTAMENTE como la espera tu backend
                                 fila_config = [
                                     str(id_cliente_clases),         # 0: Cédula
                                     str(nombre_cliente_clases),     # 1: Nombre
