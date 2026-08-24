@@ -162,7 +162,7 @@ if icono_pestana is not None:
 
 
 # ============================================================
-# CALCULAR MÉTRICAS
+# CALCULAR MÉTRICAS (CORREGIDO)
 # ============================================================
 
 def calcular_metricas(
@@ -189,85 +189,72 @@ def calcular_metricas(
         raise ValueError("La estatura debe ser mayor que cero.")
 
     # --------------------------------------------------------
-    # IMC
+    # 1. IMC
     # --------------------------------------------------------
     estatura_m = estatura_cm / 100.0
     imc = peso / (estatura_m ** 2)
 
     # --------------------------------------------------------
-    # PORCENTAJE DE GRASA
+    # 2. PORCENTAJE DE GRASA (Fórmula Antropométrica Marina EE. UU.)
     # --------------------------------------------------------
     try:
-        if sexo == "Masculino":
-            valor_log = cintura - cuello
-            if valor_log <= 0:
-                valor_log = 1.0
-
-            densidad = (
-                1.0324
-                - 0.19077 * math.log10(valor_log)
-                + 0.15456 * math.log10(estatura_cm)
-            )
-            pct_grasa = (495 / densidad) - 450
-        else:
+        sexo_str = str(sexo).strip().capitalize()
+        if sexo_str == "Femenino":
             valor_log = cintura + cadera - cuello
-            if valor_log <= 0:
+            if valor_log <= 1.0:
                 valor_log = 1.0
-
-            densidad = (
-                1.29579
-                - 0.35004 * math.log10(valor_log)
-                + 0.22100 * math.log10(estatura_cm)
+            pct_grasa = (
+                163.205 * math.log10(valor_log)
+                - 97.684 * math.log10(estatura_cm)
+                - 78.387
             )
-            pct_grasa = (495 / densidad) - 450
+        else:
+            valor_log = cintura - cuello
+            if valor_log <= 1.0:
+                valor_log = 1.0
+            pct_grasa = (
+                86.010 * math.log10(valor_log)
+                - 70.041 * math.log10(estatura_cm)
+                + 36.760
+            )
 
         pct_grasa = max(min(pct_grasa, 60.0), 3.0)
 
     except Exception:
-        pct_grasa = 15.0 if sexo == "Masculino" else 24.0
+        pct_grasa = 15.0 if str(sexo).strip().capitalize() == "Masculino" else 24.0
 
     # --------------------------------------------------------
-    # TASA METABÓLICA BASAL (Ecuación Mifflin-St Jeor)
+    # 3. MASA MAGRA Y TASA METABÓLICA BASAL (Katch-McArdle)
     # --------------------------------------------------------
-    if sexo == "Masculino":
-        tmb = 10 * peso + 6.25 * estatura_cm - 5 * edad + 5
-    else:
-        tmb = 10 * peso + 6.25 * estatura_cm - 5 * edad - 161
+    masa_magra_kg = peso * (1.0 - (pct_grasa / 100.0))
+    tmb_real = 370.0 + (21.6 * masa_magra_kg)
 
     # --------------------------------------------------------
-    # MANTENIMIENTO
+    # 4. OBJETIVO CALÓRICO
     # --------------------------------------------------------
-    mantenimiento = tmb * 1.375
+    mantenimiento = tmb_real * 1.375
 
-    # --------------------------------------------------------
-    # OBJETIVO CALÓRICO
-    # --------------------------------------------------------
     if meta == "Perder Grasa":
-        calorias = mantenimiento - 400
+        calorias = mantenimiento - 400.0
     elif meta == "Ganar Músculo":
-        calorias = mantenimiento + 350
+        calorias = mantenimiento + 350.0
     else:
         calorias = mantenimiento
 
     # --------------------------------------------------------
-    # EDAD METABÓLICA (Basada en TMB y Referencia Normopeso)
+    # 5. EDAD METABÓLICA (Comparación TMB Real vs TMB Esperada por Edad)
     # --------------------------------------------------------
-    # Peso de referencia equivalente a un IMC saludable (22.5)
-    peso_referencia = 22.5 * (estatura_m ** 2)
-    constante_sexo = 5 if sexo == "Masculino" else -161
+    sexo_str = str(sexo).strip().capitalize()
+    if sexo_str == "Femenino":
+        tmb_esperada_edad = (10.0 * peso) + (6.25 * estatura_cm) - (5.0 * edad) - 161.0
+    else:
+        tmb_esperada_edad = (10.0 * peso) + (6.25 * estatura_cm) - (5.0 * edad) + 5.0
 
-    # Se despeja la edad estimada necesaria para alcanzar la TMB actual
-    edad_estimada = (
-        (10 * peso_referencia) + (6.25 * estatura_cm) + constante_sexo - tmb
-    ) / 5.0
+    diferencia_tmb = tmb_real - tmb_esperada_edad
+    edad_metabolica_calc = edad - (diferencia_tmb / 20.0)
+    edad_metabolica = int(round(max(18, min(80, edad_metabolica_calc))))
 
-    # Ajuste por porcentaje de grasa respecto al rango óptimo
-    grasa_ideal = 15.0 if sexo == "Masculino" else 22.0
-    exceso_grasa = max(0.0, pct_grasa - grasa_ideal)
-
-    edad_metabolica_calc = edad_estimada + (exceso_grasa * 0.3)
-    edad_metabolica = int(round(max(15, min(80, edad_metabolica_calc))))
-
+    # Redondeos de retorno
     imc = float(round(imc, 2))
     pct_grasa = float(round(pct_grasa, 2))
     calorias = int(round(calorias))
@@ -969,7 +956,7 @@ else:
 
                         if imc < 10 or imc > 60:
                             st.error(
-                                f"⚠️ El IMC calculated ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
+                                f"⚠️ El IMC calculado ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
                             )
                             st.stop()
 
