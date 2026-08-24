@@ -162,7 +162,7 @@ if icono_pestana is not None:
 
 
 # ============================================================
-# CALCULAR MÉTRICAS (CORREGIDO)
+# CALCULAR MÉTRICAS (CORREGIDO Y ESTABILIZADO)
 # ============================================================
 
 def calcular_metricas(
@@ -956,7 +956,7 @@ else:
 
                         if imc < 10 or imc > 60:
                             st.error(
-                                f"⚠️ El IMC calculado ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
+                                f"⚠️ El IMC calculated ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
                             )
                             st.stop()
 
