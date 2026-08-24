@@ -227,7 +227,7 @@ def calcular_metricas(
         pct_grasa = 15.0 if sexo == "Masculino" else 24.0
 
     # --------------------------------------------------------
-    # TASA METABÓLICA BASAL
+    # TASA METABÓLICA BASAL (Ecuación Mifflin-St Jeor)
     # --------------------------------------------------------
     if sexo == "Masculino":
         tmb = 10 * peso + 6.25 * estatura_cm - 5 * edad + 5
@@ -250,11 +250,23 @@ def calcular_metricas(
         calorias = mantenimiento
 
     # --------------------------------------------------------
-    # EDAD METABÓLICA
+    # EDAD METABÓLICA (Basada en TMB y Referencia Normopeso)
     # --------------------------------------------------------
-    desvio_imc = max(0, imc - 22.0)
-    desvio_grasa = max(0, pct_grasa - (15.0 if sexo == "Masculino" else 22.0))
-    edad_metabolica = int(edad + (desvio_imc * 0.6) + (desvio_grasa * 0.4))
+    # Peso de referencia equivalente a un IMC saludable (22.5)
+    peso_referencia = 22.5 * (estatura_m ** 2)
+    constante_sexo = 5 if sexo == "Masculino" else -161
+
+    # Se despeja la edad estimada necesaria para alcanzar la TMB actual
+    edad_estimada = (
+        (10 * peso_referencia) + (6.25 * estatura_cm) + constante_sexo - tmb
+    ) / 5.0
+
+    # Ajuste por porcentaje de grasa respecto al rango óptimo
+    grasa_ideal = 15.0 if sexo == "Masculino" else 22.0
+    exceso_grasa = max(0.0, pct_grasa - grasa_ideal)
+
+    edad_metabolica_calc = edad_estimada + (exceso_grasa * 0.3)
+    edad_metabolica = int(round(max(15, min(80, edad_metabolica_calc))))
 
     imc = float(round(imc, 2))
     pct_grasa = float(round(pct_grasa, 2))
@@ -957,7 +969,7 @@ else:
 
                         if imc < 10 or imc > 60:
                             st.error(
-                                f"⚠️ El IMC calculado ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
+                                f"⚠️ El IMC calculated ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
                             )
                             st.stop()
 
@@ -1446,7 +1458,7 @@ else:
                                 # Obtenemos la fecha de hoy para el inicio del plan
                                 fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
 
-                                # Construimos la fila EXACTAMENTE como la espera tu .js
+                                # Construimos la fila EXACTAMENTE como la espera tu backend
                                 fila_config = [
                                     str(id_cliente_clases),         # 0: Cédula
                                     str(nombre_cliente_clases),     # 1: Nombre
