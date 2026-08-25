@@ -166,7 +166,7 @@ if icono_pestana is not None:
     with col_l2:
         st.image(
             icono_pestana,
-            width="stretch"
+            use_container_width=True
         )
 
 
@@ -1148,7 +1148,21 @@ else:
                         col_plan1, col_plan2 = st.columns(2)
 
                         with col_plan1:
-                            opciones_plan = ["Premium", "Personalizado", "Otro"]
+                            # Carga dinámica de tipos de plan desde la base de datos
+                            opciones_base = ["Premium", "Personalizado", "Otro"]
+                            if df_planes is not None and not df_planes.empty and "tipo_plan" in df_planes.columns:
+                                planes_existentes = (
+                                    df_planes["tipo_plan"]
+                                    .dropna()
+                                    .astype(str)
+                                    .str.strip()
+                                    .unique()
+                                    .tolist()
+                                )
+                                opciones_plan = list(dict.fromkeys(opciones_base + planes_existentes))
+                            else:
+                                opciones_plan = opciones_base
+
                             plan_actual = resumen_actual["plan"]
                             plan_cliente = st.selectbox(
                                 "Plan:",
