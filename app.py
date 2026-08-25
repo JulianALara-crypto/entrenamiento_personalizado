@@ -98,7 +98,7 @@ st.markdown(
 
 
 # ============================================================
-# FUNCIÓN FORMATEAR FECHA
+# FUNCIÓN FORMATEAR FECHA Y CÉDULA
 # ============================================================
 
 def parsear_fecha(valor_fecha):
@@ -147,6 +147,15 @@ def formatear_fecha(valor_fecha):
     return dt.strftime("%d-%m-%Y")
 
 
+def normalizar_cedula(valor):
+    if pd.isna(valor):
+        return ""
+    texto = str(valor).strip()
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    return texto
+
+
 # ============================================================
 # MOSTRAR LOGO
 # ============================================================
@@ -162,7 +171,7 @@ if icono_pestana is not None:
 
 
 # ============================================================
-# CALCULAR MÉTRICAS (CORREGIDO Y AJUSTADO MATEMÁTICAMENTE)
+# CALCULAR MÉTRICAS
 # ============================================================
 
 def calcular_metricas(
@@ -188,15 +197,9 @@ def calcular_metricas(
     if estatura_cm <= 0:
         raise ValueError("La estatura debe ser mayor que cero.")
 
-    # --------------------------------------------------------
-    # 1. IMC
-    # --------------------------------------------------------
     estatura_m = estatura_cm / 100.0
     imc = peso / (estatura_m ** 2)
 
-    # --------------------------------------------------------
-    # 2. PORCENTAJE DE GRASA (Fórmula Antropométrica Marina EE. UU.)
-    # --------------------------------------------------------
     try:
         sexo_str = str(sexo).strip().capitalize()
         if sexo_str == "Femenino":
@@ -223,15 +226,8 @@ def calcular_metricas(
     except Exception:
         pct_grasa = 15.0 if str(sexo).strip().capitalize() == "Masculino" else 24.0
 
-    # --------------------------------------------------------
-    # 3. MASA MAGRA Y TASA METABÓLICA BASAL (Katch-McArdle)
-    # --------------------------------------------------------
     masa_magra_kg = peso * (1.0 - (pct_grasa / 100.0))
     tmb_real = 370.0 + (21.6 * masa_magra_kg)
-
-    # --------------------------------------------------------
-    # 4. OBJETIVO CALÓRICO
-    # --------------------------------------------------------
     mantenimiento = tmb_real * 1.375
 
     if meta == "Perder Grasa":
@@ -241,9 +237,6 @@ def calcular_metricas(
     else:
         calorias = mantenimiento
 
-    # --------------------------------------------------------
-    # 5. EDAD METABÓLICA (Comparación TMB Real vs TMB Esperada por Edad)
-    # --------------------------------------------------------
     sexo_str = str(sexo).strip().capitalize()
     if sexo_str == "Femenino":
         tmb_esperada_edad = (10.0 * peso) + (6.25 * estatura_cm) - (5.0 * edad) - 161.0
@@ -254,11 +247,9 @@ def calcular_metricas(
     edad_metabolica_calc = edad - (diferencia_tmb / 20.0)
     edad_metabolica = int(round(max(18, min(80, edad_metabolica_calc))))
 
-    # Redondeos de retorno
     imc = float(round(imc, 2))
     pct_grasa = float(round(pct_grasa, 2))
     calorias = int(round(calorias))
-    edad_metabolica = int(edad_metabolica)
 
     return (
         imc,
@@ -306,16 +297,6 @@ def link_whatsapp(
 
 
 # ============================================================
-# NORMALIZAR CÉDULA
-# ============================================================
-
-def normalizar_cedula(valor):
-    if pd.isna(valor):
-        return ""
-    return str(valor).replace(".0", "").strip()
-
-
-# ============================================================
 # CARGAR BASE DE DATOS
 # ============================================================
 
@@ -329,157 +310,63 @@ def cargar_bd():
         respuesta.raise_for_status()
         res = respuesta.json()
 
-        # ====================================================
-        # USUARIOS
-        # ====================================================
-        usuarios_raw = res.get("usuarios", [])
-        if len(usuarios_raw) > 1:
-            columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
-            df_u = pd.DataFrame(usuarios_raw[1:], columns=columnas_u)
-            df_u = df_u.loc[:, ~df_u.columns.duplicated()]
-        else:
-            df_u = pd.DataFrame(
-                columns=[
-                    "cedula",
-                    "nombre_completo",
-                    "whatsapp",
-                    "eps",
-                    "condiciones_medicas",
-                    "rol",
-                    "password",
-                    "fecha_registro",
-                ]
-            )
+        def procesar_raw(nombre_hoja, columnas_defecto):
+            raw = res.get(nombre_hoja, [])
+            if len(raw) > 1:
+                cols = [str(c).strip().lower() for c in raw[0]]
+                df = pd.DataFrame(raw[1:], columns=cols)
+                return df.loc[:, ~df.columns.duplicated()]
+            return pd.DataFrame(columns=columnas_defecto)
 
-        # ====================================================
-        # HISTORIAL DE MEDIDAS
-        # ====================================================
-        historial_raw = res.get("historial", [])
-        if len(historial_raw) > 1:
-            columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
-            df_m = pd.DataFrame(historial_raw[1:], columns=columnas_h)
-            df_m = df_m.loc[:, ~df_m.columns.duplicated()]
-        else:
-            df_m = pd.DataFrame(
-                columns=[
-                    "id_registro",
-                    "fecha_evaluacion",
-                    "cedula",
-                    "edad",
-                    "sexo",
-                    "meta",
-                    "peso_kg",
-                    "estatura_cm",
-                    "cuello_cm",
-                    "hombros_cm",
-                    "bicep_der_cm",
-                    "bicep_izq_cm",
-                    "pecho_cm",
-                    "cintura_cm",
-                    "cadera_cm",
-                    "pierna_der_cm",
-                    "pierna_izq_cm",
-                    "gemelo_der_cm",
-                    "gemelo_izq_cm",
-                    "imc",
-                    "porcentaje_grasa",
-                    "calorias_objetivo",
-                    "edad_metabolica",
-                ]
-            )
+        df_u = procesar_raw("usuarios", [
+            "cedula", "nombre_completo", "whatsapp", "eps",
+            "condiciones_medicas", "rol", "password", "fecha_registro"
+        ])
 
-        # ====================================================
-        # PAGOS
-        # ====================================================
-        pagos_raw = res.get("pagos", [])
-        if len(pagos_raw) > 1:
-            columnas_p = [str(c).strip().lower() for c in pagos_raw[0]]
-            df_p = pd.DataFrame(pagos_raw[1:], columns=columnas_p)
-            df_p = df_p.loc[:, ~df_p.columns.duplicated()]
-        else:
-            df_p = pd.DataFrame(
-                columns=[
-                    "id_pago",
-                    "cedula",
-                    "fecha_pago",
-                    "valor",
-                    "concepto",
-                    "valor_mensualidad",
-                ]
-            )
+        df_m = procesar_raw("historial", [
+            "id_registro", "fecha_evaluacion", "cedula", "edad", "sexo", "meta",
+            "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm", "bicep_der_cm",
+            "bicep_izq_cm", "pecho_cm", "cintura_cm", "cadera_cm", "pierna_der_cm",
+            "pierna_izq_cm", "gemelo_der_cm", "gemelo_izq_cm", "imc",
+            "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"
+        ])
 
-        # ====================================================
-        # CLASES
-        # ====================================================
-        clases_raw = res.get("clases", [])
-        if len(clases_raw) > 1:
-            columnas_c = [str(c).strip().lower() for c in clases_raw[0]]
-            df_c = pd.DataFrame(clases_raw[1:], columns=columnas_c)
-            df_c = df_c.loc[:, ~df_c.columns.duplicated()]
-        else:
-            df_c = pd.DataFrame(
-                columns=[
-                    "id_clase",
-                    "cedula",
-                    "nombre_completo",
-                    "fecha_clase",
-                    "tipo_plan",
-                    "periodo",
-                    "estado",
-                ]
-            )
+        df_p = procesar_raw("pagos", [
+            "id_pago", "cedula", "fecha_pago", "valor", "concepto", "valor_mensualidad"
+        ])
 
-        # ====================================================
-        # LIMPIAR CÉDULAS
-        # ====================================================
-        for dataframe in (df_u, df_m, df_p, df_c):
-            if not dataframe.empty and "cedula" in dataframe.columns:
-                dataframe["cedula"] = dataframe["cedula"].apply(normalizar_cedula)
+        df_c = procesar_raw("clases", [
+            "id_clase", "cedula", "nombre_completo", "fecha_clase",
+            "tipo_plan", "periodo", "estado", "id_plan"
+        ])
 
-        # ====================================================
-        # NUMÉRICOS DE MEDIDAS
-        # ====================================================
+        df_planes = procesar_raw("planes", [
+            "id_plan", "cedula", "nombre_completo", "tipo_plan",
+            "fecha_inicio", "fecha_fin", "estado", "observaciones", "clases_incluidas"
+        ])
+
+        for df in (df_u, df_m, df_p, df_c, df_planes):
+            if not df.empty and "cedula" in df.columns:
+                df["cedula"] = df["cedula"].apply(normalizar_cedula)
+
         columnas_numericas_medidas = [
-            "edad",
-            "peso_kg",
-            "estatura_cm",
-            "cuello_cm",
-            "hombros_cm",
-            "bicep_der_cm",
-            "bicep_izq_cm",
-            "pecho_cm",
-            "cintura_cm",
-            "cadera_cm",
-            "pierna_der_cm",
-            "pierna_izq_cm",
-            "gemelo_der_cm",
-            "gemelo_izq_cm",
-            "imc",
-            "porcentaje_grasa",
-            "calorias_objetivo",
-            "edad_metabolica",
+            "edad", "peso_kg", "estatura_cm", "cuello_cm", "hombros_cm",
+            "bicep_der_cm", "bicep_izq_cm", "pecho_cm", "cintura_cm",
+            "cadera_cm", "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm",
+            "gemelo_izq_cm", "imc", "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"
         ]
 
         for columna in columnas_numericas_medidas:
             if columna in df_m.columns:
                 df_m[columna] = pd.to_numeric(df_m[columna], errors="coerce")
 
-        # ====================================================
-        # NUMÉRICOS DE PAGOS
-        # ====================================================
         for columna in ["valor", "valor_mensualidad"]:
             if columna in df_p.columns:
                 df_p[columna] = pd.to_numeric(df_p[columna], errors="coerce")
 
-        # ====================================================
-        # NUMÉRICOS DE CLASES
-        # ====================================================
         if not df_c.empty and "periodo" in df_c.columns:
             df_c["periodo"] = pd.to_numeric(df_c["periodo"], errors="coerce")
 
-        # ====================================================
-        # FECHAS
-        # ====================================================
         if not df_u.empty and "fecha_registro" in df_u.columns:
             df_u["fecha_registro"] = df_u["fecha_registro"].apply(formatear_fecha)
 
@@ -492,24 +379,11 @@ def cargar_bd():
         if not df_c.empty and "fecha_clase" in df_c.columns:
             df_c["fecha_clase"] = df_c["fecha_clase"].apply(formatear_fecha)
 
-        if not df_c.empty and "fecha_registro" in df_c.columns:
-            df_c["fecha_registro"] = df_c["fecha_registro"].apply(formatear_fecha)
-
-        return (
-            df_u,
-            df_m,
-            df_p,
-            df_c
-        )
+        return df_u, df_m, df_p, df_c, df_planes
 
     except Exception as e:
         st.error(f"Error procesando base de datos: {e}")
-        return (
-            pd.DataFrame(),
-            pd.DataFrame(),
-            pd.DataFrame(),
-            pd.DataFrame()
-        )
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 
 # ============================================================
@@ -523,13 +397,8 @@ def mostrar_graficos_evolucion(df_filtrado):
     df_graficos = df_filtrado.copy()
 
     columnas_num = [
-        "peso_kg",
-        "porcentaje_grasa",
-        "cintura_cm",
-        "pecho_cm",
-        "cadera_cm",
-        "bicep_der_cm",
-        "bicep_izq_cm",
+        "peso_kg", "porcentaje_grasa", "cintura_cm", "pecho_cm",
+        "cadera_cm", "bicep_der_cm", "bicep_izq_cm",
     ]
 
     for col in columnas_num:
@@ -558,47 +427,27 @@ def mostrar_graficos_evolucion(df_filtrado):
 
     st.markdown("### 📈 Gráficas de Evolución Temporal")
 
-    tab1, tab2, tab3 = st.tabs(
-        [
-            "⚖️ Peso y Composición",
-            "📏 Perímetros Principales",
-            "💪 Extremidades",
-        ]
-    )
+    tab1, tab2, tab3 = st.tabs([
+        "⚖️ Peso y Composición",
+        "📏 Perímetros Principales",
+        "💪 Extremidades",
+    ])
 
     with tab1:
         col_g1, col_g2 = st.columns(2)
 
         with col_g1:
-            st.markdown(
-                "<p style='text-align: center;'>Evolución del Peso Corporal (kg)</p>",
-                unsafe_allow_html=True,
-            )
-            df_peso = (
-                df_graficos
-                .set_index("Fecha")[["peso_kg"]]
-                .rename(columns={"peso_kg": "Peso (kg)"})
-            )
+            st.markdown("<p style='text-align: center;'>Evolución del Peso Corporal (kg)</p>", unsafe_allow_html=True)
+            df_peso = df_graficos.set_index("Fecha")[["peso_kg"]].rename(columns={"peso_kg": "Peso (kg)"})
             st.line_chart(df_peso)
 
         with col_g2:
-            st.markdown(
-                "<p style='text-align: center;'>Evolución del % de Grasa Corporal</p>",
-                unsafe_allow_html=True,
-            )
-            df_grasa = (
-                df_graficos
-                .set_index("Fecha")[["porcentaje_grasa"]]
-                .rename(columns={"porcentaje_grasa": "% Grasa"})
-            )
+            st.markdown("<p style='text-align: center;'>Evolución del % de Grasa Corporal</p>", unsafe_allow_html=True)
+            df_grasa = df_graficos.set_index("Fecha")[["porcentaje_grasa"]].rename(columns={"porcentaje_grasa": "% Grasa"})
             st.line_chart(df_grasa)
 
     with tab2:
-        st.markdown(
-            "<p style='text-align: center;'>Evolución de Torso y Cintura (cm)</p>",
-            unsafe_allow_html=True,
-        )
-
+        st.markdown("<p style='text-align: center;'>Evolución de Torso y Cintura (cm)</p>", unsafe_allow_html=True)
         columnas_perimetros = []
         nombres_perimetros = {}
 
@@ -615,19 +464,11 @@ def mostrar_graficos_evolucion(df_filtrado):
             nombres_perimetros["cadera_cm"] = "Cadera/Glúteos"
 
         if columnas_perimetros:
-            df_peri = (
-                df_graficos
-                .set_index("Fecha")[columnas_perimetros]
-                .rename(columns=nombres_perimetros)
-            )
+            df_peri = df_graficos.set_index("Fecha")[columnas_perimetros].rename(columns=nombres_perimetros)
             st.line_chart(df_peri)
 
     with tab3:
-        st.markdown(
-            "<p style='text-align: center;'>Evolución de Brazos (cm)</p>",
-            unsafe_allow_html=True,
-        )
-
+        st.markdown("<p style='text-align: center;'>Evolución de Brazos (cm)</p>", unsafe_allow_html=True)
         columnas_brazos = []
         nombres_brazos = {}
 
@@ -640,11 +481,7 @@ def mostrar_graficos_evolucion(df_filtrado):
             nombres_brazos["bicep_izq_cm"] = "Bícep Izquierdo"
 
         if columnas_brazos:
-            df_brz = (
-                df_graficos
-                .set_index("Fecha")[columnas_brazos]
-                .rename(columns=nombres_brazos)
-            )
+            df_brz = df_graficos.set_index("Fecha")[columnas_brazos].rename(columns=nombres_brazos)
             st.line_chart(df_brz)
 
 
@@ -652,92 +489,70 @@ def mostrar_graficos_evolucion(df_filtrado):
 # RESUMEN DE CLASES
 # ============================================================
 
-@st.cache_data(ttl=10)
-def cargar_solo_planes():
-    """Función auxiliar para descargar la hoja 'Planes' en tiempo real."""
-    try:
-        res = requests.get(URL_API, timeout=30).json()
-        planes_raw = res.get("planes", [])
-        if len(planes_raw) > 1:
-            col_pl = [str(c).strip().lower() for c in planes_raw[0]]
-            df_pl = pd.DataFrame(planes_raw[1:], columns=col_pl)
-            return df_pl.loc[:, ~df_pl.columns.duplicated()]
-        return pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+def obtener_resumen_clases(df_clases, df_planes, cedula):
+    cedula_str = normalizar_cedula(cedula)
 
-
-def obtener_resumen_clases(df_clases, cedula):
-    """Calcula el progreso de clases leyendo la hoja Planes y cruzándola con Clases."""
     resultado = {
-        "plan": "Sin plan registrado",
+        "plan": "Sin Plan",
         "clases_contratadas": 0,
         "clases_tomadas": 0,
         "clases_restantes": 0,
         "porcentaje": 0.0,
-        "registros": pd.DataFrame(),
+        "id_plan": None,
+        "registros": pd.DataFrame()
     }
 
-    if not cedula:
-        return resultado
-
-    cedula_str = normalizar_cedula(cedula)
-    
-    # 1. Traer los datos reales de la pestaña Planes
-    df_planes = cargar_solo_planes()
-
-    # 2. Buscar el plan ACTIVO del cliente
-    if not df_planes.empty and "cedula" in df_planes.columns:
-        df_planes["_cedula_norm"] = df_planes["cedula"].apply(normalizar_cedula)
+    # 1. Obtener plan ACTIVO
+    if df_planes is not None and not df_planes.empty and "cedula" in df_planes.columns:
         planes_cliente = df_planes[
-            (df_planes["_cedula_norm"] == cedula_str) & 
+            (df_planes["cedula"].apply(normalizar_cedula) == cedula_str) &
             (df_planes["estado"].astype(str).str.strip().str.lower() == "activo")
         ]
+
         if not planes_cliente.empty:
             plan_activo = planes_cliente.iloc[-1]
-            resultado["plan"] = str(plan_activo.get("tipo_plan", ""))
+            resultado["id_plan"] = str(plan_activo.get("id_plan", "")).strip()
+            resultado["plan"] = str(plan_activo.get("tipo_plan", "Personalizado"))
             resultado["clases_contratadas"] = int(pd.to_numeric(plan_activo.get("clases_incluidas", 0), errors="coerce"))
 
-    # 3. Contar las clases que ya han sido tomadas en la pestaña Clases
+    # 2. Obtener clases tomadas SOLO asociadas al id_plan ACTIVO
     if df_clases is not None and not df_clases.empty and "cedula" in df_clases.columns:
-        df_clases["_cedula_norm"] = df_clases["cedula"].apply(normalizar_cedula)
-        
-        # Asegurarnos de que exista la columna estado
-        if "estado" not in df_clases.columns:
-            df_clases["estado"] = "tomada"
-            
-        registros = df_clases[
-            (df_clases["_cedula_norm"] == cedula_str) &
-            (df_clases["estado"].astype(str).str.strip().str.lower() == "tomada")
-        ].copy()
-        
-        resultado["clases_tomadas"] = len(registros)
-        resultado["registros"] = registros.drop(columns=["_cedula_norm"], errors="ignore")
+        df_clases_cliente = df_clases[df_clases["cedula"].apply(normalizar_cedula) == cedula_str]
 
-    # 4. Calcular los totales y porcentajes
-    resultado["clases_restantes"] = max(resultado["clases_contratadas"] - resultado["clases_tomadas"], 0)
-    
+        if resultado["id_plan"] and "id_plan" in df_clases_cliente.columns:
+            registros = df_clases_cliente[
+                (df_clases_cliente["id_plan"].astype(str).str.strip() == resultado["id_plan"]) &
+                (df_clases_cliente["estado"].astype(str).str.strip().str.lower() == "tomada")
+            ]
+        else:
+            registros = df_clases_cliente[
+                df_clases_cliente["estado"].astype(str).str.strip().str.lower() == "tomada"
+            ]
+
+        resultado["registros"] = registros
+        resultado["clases_tomadas"] = len(registros)
+
+    resultado["clases_restantes"] = max(0, resultado["clases_contratadas"] - resultado["clases_tomadas"])
+
     if resultado["clases_contratadas"] > 0:
-        resultado["porcentaje"] = min((resultado["clases_tomadas"] / resultado["clases_contratadas"]) * 100, 100)
+        pct = (resultado["clases_tomadas"] / resultado["clases_contratadas"]) * 100.0
+        resultado["porcentaje"] = min(pct, 100.0)
 
     return resultado
 
 
-# ============================================================
-# MOSTRAR RESUMEN DE CLASES
-# ============================================================
-
 def mostrar_resumen_clases(
     df_clases,
+    df_planes,
     cedula,
     titulo="🏋️ Clases Personalizadas"
 ):
-    resumen = obtener_resumen_clases(df_clases, cedula)
+    resumen = obtener_resumen_clases(df_clases, df_planes, cedula)
 
     st.markdown(f"### {titulo}")
 
     if resumen["clases_contratadas"] <= 0:
-        st.info("Este cliente todavía no tiene un plan de clases configurado.")
+        st.info("Este cliente todavía no tiene un plan de clases activo configurado.")
         return
 
     c1, c2, c3, c4 = st.columns(4)
@@ -795,14 +610,8 @@ if not st.session_state["autenticado"]:
     with col1:
         st.subheader("🔐 Iniciar Sesión")
 
-        cedula_ingreso = st.text_input(
-            "Número de Cédula / ID:"
-        ).strip()
-
-        pass_ingreso = st.text_input(
-            "Contraseña:",
-            type="password"
-        ).strip()
+        cedula_ingreso = st.text_input("Número de Cédula / ID:").strip()
+        pass_ingreso = st.text_input("Contraseña:", type="password").strip()
 
         if st.button("Ingresar", use_container_width=True):
             if cedula_ingreso == "admin" and pass_ingreso == "admin123456":
@@ -812,7 +621,7 @@ if not st.session_state["autenticado"]:
                 st.session_state["nombre"] = "JULIAN AVILA"
                 st.rerun()
             else:
-                df_usuarios, _, _, _ = cargar_bd()
+                df_usuarios, _, _, _, _ = cargar_bd()
 
                 if not df_usuarios.empty and cedula_ingreso in df_usuarios["cedula"].values:
                     u = df_usuarios[df_usuarios["cedula"] == cedula_ingreso].iloc[0]
@@ -846,7 +655,7 @@ if not st.session_state["autenticado"]:
             reg_pass = st.text_input("Crea tu Contraseña:", type="password").strip()
 
             if st.form_submit_button("Crear Perfil"):
-                df_usuarios, _, _, _ = cargar_bd()
+                df_usuarios, _, _, _, _ = cargar_bd()
 
                 if not reg_cedula or not reg_nombre or not reg_pass:
                     st.error("⚠️ Cédula, Nombre y Contraseña son obligatorios.")
@@ -894,7 +703,7 @@ else:
         st.session_state["nombre"] = None
         st.rerun()
 
-    df_usuarios, df_historial, df_pagos, df_clases = cargar_bd()
+    df_usuarios, df_historial, df_pagos, df_clases, df_planes = cargar_bd()
 
     # ========================================================
     # CLIENTE
@@ -956,7 +765,7 @@ else:
 
                         if imc < 10 or imc > 60:
                             st.error(
-                                f"⚠️ El IMC calculado ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
+                                f"⚠️ El IMC calculated ({imc}) está fuera de un rango razonable. Revisa peso y estatura."
                             )
                             st.stop()
 
@@ -964,52 +773,20 @@ else:
                         fecha_hoy = datetime.today().strftime("%d-%m-%Y")
 
                         fila_medidas = [
-                            str(id_reg),
-                            str(fecha_hoy),
-                            str(st.session_state["cedula"]),
-                            int(edad),
-                            str(sexo),
-                            str(meta),
-                            float(peso),
-                            float(estatura),
-                            float(cuello),
-                            float(hombros),
-                            float(bicep_der),
-                            float(bicep_izq),
-                            float(pecho),
-                            float(cintura),
-                            float(cadera),
-                            float(pierna_der),
-                            float(pierna_izq),
-                            float(gemelo_der),
-                            float(gemelo_izq),
-                            float(imc),
-                            float(grasa),
-                            int(cals),
-                            int(edad_bio),
+                            str(id_reg), str(fecha_hoy), str(st.session_state["cedula"]),
+                            int(edad), str(sexo), str(meta), float(peso), float(estatura),
+                            float(cuello), float(hombros), float(bicep_der), float(bicep_izq),
+                            float(pecho), float(cintura), float(cadera), float(pierna_der),
+                            float(pierna_izq), float(gemelo_der), float(gemelo_izq),
+                            float(imc), float(grasa), int(cals), int(edad_bio),
                         ]
 
                         respuesta_medidas = requests.post(
                             URL_API,
-                            json={
-                                "action": "guardar_medidas",
-                                "row": fila_medidas,
-                            },
+                            json={"action": "guardar_medidas", "row": fila_medidas},
                             timeout=30,
                         )
                         respuesta_medidas.raise_for_status()
-
-                        try:
-                            resultado_api = respuesta_medidas.json()
-                        except Exception:
-                            resultado_api = {}
-
-                        if resultado_api.get("status") == "error":
-                            st.error(
-                                "❌ Google Apps Script reportó un error: "
-                                + str(resultado_api.get("message", "Error desconocido"))
-                            )
-                            st.stop()
 
                         st.cache_data.clear()
                         st.success("¡Medidas guardadas con éxito!")
@@ -1063,16 +840,12 @@ else:
                     gras_i = get_val(inicial, ["porcentaje_grasa", "grasa"], 20.0)
                     gras_a = get_val(actual, ["porcentaje_grasa", "grasa"], 20.0)
 
-                    diff_peso = peso_a - peso_i
-                    diff_cintura = cint_a - cint_i
-                    diff_grasa = gras_a - gras_i
-
                     st.info("📊 Resumen desde tu primer registro hasta hoy:")
 
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("Variación de Peso", f"{peso_a} kg", f"{diff_peso:.1f} kg")
-                    c2.metric("Variación de Cintura", f"{cint_a} cm", f"{diff_cintura:.1f} cm")
-                    c3.metric("Variación % Grasa", f"{gras_a}%", f"{diff_grasa:.1f}%")
+                    c1.metric("Variación de Peso", f"{peso_a} kg", f"{peso_a - peso_i:.1f} kg")
+                    c2.metric("Variación de Cintura", f"{cint_a} cm", f"{cint_a - cint_i:.1f} cm")
+                    c3.metric("Variación % Grasa", f"{gras_a}%", f"{gras_a - gras_i:.1f}%")
 
                 mostrar_graficos_evolucion(mis_registros)
 
@@ -1084,13 +857,13 @@ else:
         # MIS CLASES
         elif opcion == "🏋️ Mis Clases":
             st.subheader("🏋️ Mi Plan de Clases Personalizadas")
-            mostrar_resumen_clases(df_clases, st.session_state["cedula"])
+            mostrar_resumen_clases(df_clases, df_planes, st.session_state["cedula"])
 
-            resumen_clases = obtener_resumen_clases(df_clases, st.session_state["cedula"])
+            resumen_clases = obtener_resumen_clases(df_clases, df_planes, st.session_state["cedula"])
             registros_clases = resumen_clases["registros"]
 
             if not registros_clases.empty:
-                st.markdown("#### 📅 Clases tomadas")
+                st.markdown("#### 📅 Clases tomadas de mi plan activo")
                 tabla = registros_clases.copy()
 
                 columnas_tabla = [
@@ -1114,7 +887,7 @@ else:
 
                 st.dataframe(tabla.astype(str), use_container_width=True, hide_index=True)
             else:
-                st.info("Todavía no tienes clases registradas.")
+                st.info("Todavía no tienes clases registradas en este plan.")
 
     # ========================================================
     # ADMINISTRADOR
@@ -1164,7 +937,7 @@ else:
 
                             # RESUMEN DE CLASES EN PERFIL
                             st.markdown("---")
-                            mostrar_resumen_clases(df_clases, id_cliente, "🏋️ Resumen de Clases")
+                            mostrar_resumen_clases(df_clases, df_planes, id_cliente, "🏋️ Resumen de Clases")
 
                             # PAGOS Y MENSUALIDAD
                             st.markdown("---")
@@ -1272,26 +1045,13 @@ else:
                                             if valor_pago <= 0:
                                                 st.error("❌ El valor del pago debe ser mayor que cero.")
                                                 st.stop()
-                                            if not concepto_pago:
-                                                concepto_pago = "Abono mensualidad"
-
-                                            nuevo_total = total_pagado + valor_pago
-                                            if nuevo_total > valor_mensualidad + 0.001:
-                                                st.error(
-                                                    f"❌ El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
-                                                )
-                                                st.stop()
 
                                             id_pago = f"{id_cliente}_{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
                                             fecha_pago = datetime.today().strftime("%d-%m-%Y")
 
                                             fila_pago = [
-                                                str(id_pago),
-                                                str(id_cliente),
-                                                str(fecha_pago),
-                                                float(valor_pago),
-                                                str(concepto_pago),
-                                                float(valor_mensualidad),
+                                                str(id_pago), str(id_cliente), str(fecha_pago),
+                                                float(valor_pago), str(concepto_pago), float(valor_mensualidad),
                                             ]
 
                                             respuesta_pago = requests.post(
@@ -1300,18 +1060,6 @@ else:
                                                 timeout=30,
                                             )
                                             respuesta_pago.raise_for_status()
-
-                                            try:
-                                                resultado_pago = respuesta_pago.json()
-                                            except Exception:
-                                                resultado_pago = {}
-
-                                            if resultado_pago.get("status") == "error":
-                                                st.error(
-                                                    "❌ Google Apps Script reportó un error: "
-                                                    + str(resultado_pago.get("message", "Error desconocido"))
-                                                )
-                                                st.stop()
 
                                             st.cache_data.clear()
                                             st.success("✅ Pago registrado correctamente.")
@@ -1324,14 +1072,8 @@ else:
                                 st.markdown("#### 📜 Historial de Pagos")
                                 pagos_mostrar = pagos_cliente.copy()
                                 if "_fecha_dt" not in pagos_mostrar.columns:
-                                    pagos_mostrar["_fecha_dt"] = (
-                                        pagos_mostrar["fecha_pago"].apply(parsear_fecha)
-                                        if "fecha_pago" in pagos_mostrar.columns
-                                        else pd.NaT
-                                    )
-                                pagos_mostrar = pagos_mostrar.sort_values(by="_fecha_dt", ascending=False).drop(
-                                    columns=["_fecha_dt"], errors="ignore"
-                                )
+                                    pagos_mostrar["_fecha_dt"] = pagos_mostrar["fecha_pago"].apply(parsear_fecha)
+                                pagos_mostrar = pagos_mostrar.sort_values(by="_fecha_dt", ascending=False).drop(columns=["_fecha_dt"], errors="ignore")
 
                                 columnas_pago_mostrar = [
                                     c for c in ["fecha_pago", "valor", "concepto", "valor_mensualidad"]
@@ -1392,9 +1134,9 @@ else:
                     nombre_cliente_clases = cliente_clase_sel.split(" - ", 1)[1]
 
                     st.markdown(f"### 👤 {nombre_cliente_clases}")
-                    mostrar_resumen_clases(df_clases, id_cliente_clases)
+                    mostrar_resumen_clases(df_clases, df_planes, id_cliente_clases)
 
-                    resumen_actual = obtener_resumen_clases(df_clases, id_cliente_clases)
+                    resumen_actual = obtener_resumen_clases(df_clases, df_planes, id_cliente_clases)
 
                     # ------------------------------------------------
                     # CONFIGURACIÓN DEL PLAN
@@ -1443,35 +1185,29 @@ else:
                         if guardar_config_plan:
                             try:
                                 fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
+                                id_plan_nuevo = f"PLAN_{id_cliente_clases}_{datetime.today().strftime('%Y%m%d%H%M%S')}"
 
                                 fila_config = [
-                                    str(id_cliente_clases),         # 0: Cédula
-                                    str(nombre_cliente_clases),     # 1: Nombre
-                                    str(plan_cliente),              # 2: Tipo de Plan
-                                    fecha_hoy_str,                  # 3: Fecha Inicio
-                                    "",                             # 4: Fecha Fin (vacío)
-                                    "Activo",                       # 5: Estado
-                                    "Configuración del plan",       # 6: Observaciones
-                                    int(clases_contratadas),        # 7: Clases Incluidas
+                                    str(id_plan_nuevo),             # 0: ID Plan (NUEVO)
+                                    str(id_cliente_clases),         # 1: Cédula
+                                    str(nombre_cliente_clases),     # 2: Nombre
+                                    str(plan_cliente),              # 3: Tipo de Plan
+                                    fecha_hoy_str,                  # 4: Fecha Inicio
+                                    "",                             # 5: Fecha Fin (vacío)
+                                    "Activo",                       # 6: Estado
+                                    "Configuración del plan",       # 7: Observaciones
+                                    int(clases_contratadas),        # 8: Clases Incluidas
                                 ]
 
                                 respuesta_config = requests.post(
                                     URL_API,
                                     json={
-                                        "action": "guardar_plan",
+                                        "action": "registrar_plan",
                                         "row": fila_config,
                                     },
                                     timeout=30,
                                 )
                                 respuesta_config.raise_for_status()
-                                resultado_config = respuesta_config.json()
-
-                                if resultado_config.get("status") == "error":
-                                    st.error(
-                                        "❌ Google Apps Script reportó un error: "
-                                        + str(resultado_config.get("message", "Error desconocido"))
-                                    )
-                                    st.stop()
 
                                 st.cache_data.clear()
                                 st.success("✅ Configuración del plan guardada correctamente.")
@@ -1490,7 +1226,7 @@ else:
                         resumen_actual["clases_contratadas"] > 0
                         and resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]
                     ):
-                        st.warning("⚠️ Este cliente ya utilizó todas las clases contratadas.")
+                        st.warning("⚠️ Este cliente ya utilizó todas las clases contratadas de su plan activo. Por favor configura un nuevo plan.")
 
                     with st.form(f"form_registro_clase_{id_cliente_clases}"):
                         fecha_clase = st.date_input(
@@ -1512,7 +1248,7 @@ else:
                                     st.stop()
 
                                 if resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]:
-                                    st.error("❌ El cliente ya utilizó todas las clases de su plan.")
+                                    st.error("❌ El cliente ya utilizó todas las clases de su plan activo.")
                                     st.stop()
 
                                 fecha_clase_str = fecha_clase.strftime("%d-%m-%Y")
@@ -1544,25 +1280,18 @@ else:
                                     str(resumen_actual["plan"]),
                                     "",
                                     "Tomada",
+                                    str(resumen_actual["id_plan"]) # ID del plan activo
                                 ]
 
                                 respuesta_clase = requests.post(
                                     URL_API,
                                     json={
-                                        "action": "guardar_clase",
+                                        "action": "registrar_clase",
                                         "row": fila_clase,
                                     },
                                     timeout=30,
                                 )
                                 respuesta_clase.raise_for_status()
-                                resultado_clase = respuesta_clase.json()
-
-                                if resultado_clase.get("status") == "error":
-                                    st.error(
-                                        "❌ Google Apps Script reportó un error: "
-                                        + str(resultado_clase.get("message", "Error desconocido"))
-                                    )
-                                    st.stop()
 
                                 st.cache_data.clear()
                                 st.success("✅ Clase registrada correctamente.")
@@ -1575,9 +1304,9 @@ else:
                     # HISTORIAL DE CLASES
                     # ------------------------------------------------
                     st.markdown("---")
-                    st.markdown("#### 📋 Historial de clases tomadas")
+                    st.markdown("#### 📋 Historial de clases tomadas del plan activo")
 
-                    resumen_historial = obtener_resumen_clases(df_clases, id_cliente_clases)
+                    resumen_historial = obtener_resumen_clases(df_clases, df_planes, id_cliente_clases)
                     registros_historial = resumen_historial["registros"]
 
                     if not registros_historial.empty:
@@ -1604,6 +1333,6 @@ else:
 
                         st.dataframe(historial.astype(str), use_container_width=True, hide_index=True)
                     else:
-                        st.info("Este cliente todavía no tiene clases registradas.")
+                        st.info("Este cliente todavía no tiene clases registradas en este plan.")
             else:
                 st.info("No hay clientes registrados actualmente.")
