@@ -13,9 +13,7 @@ from PIL import Image
 # CONFIGURACIÓN GENERAL
 # ============================================================
 
-URL_API = (
-    "https://script.google.com/macros/s/AKfycbwlxInt5LaaJ1B4wiBjiw5tlPyIjgEk_G0ButQFxWlmhJfGImZOYNCXFhPtlud5LfSU/exec"
-)
+URL_API = ("https://script.google.com/macros/s/AKfycbzjuaPtqfWhPd0NXcbmGSOKUfkzINWiiKoXk87a2zVR90HD7qyeKvyLfax5kwsMKuI/exec")
 
 
 # ============================================================
