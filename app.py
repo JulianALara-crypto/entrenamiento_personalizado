@@ -654,23 +654,42 @@ def mostrar_graficos_evolucion(df_filtrado):
 
 @st.cache_data(ttl=10)
 def cargar_solo_planes():
-    """Función auxiliar para descargar la hoja 'Planes' en tiempo real."""
+    """Descarga la hoja Planes y conserva el ID único de cada contratación."""
     try:
         res = requests.get(URL_API, timeout=30).json()
         planes_raw = res.get("planes", [])
         if len(planes_raw) > 1:
             col_pl = [str(c).strip().lower() for c in planes_raw[0]]
             df_pl = pd.DataFrame(planes_raw[1:], columns=col_pl)
-            return df_pl.loc[:, ~df_pl.columns.duplicated()]
+            df_pl = df_pl.loc[:, ~df_pl.columns.duplicated()]
+
+            if "id_plan" not in df_pl.columns:
+                df_pl["id_plan"] = ""
+
+            if "clases_incluidas" in df_pl.columns:
+                df_pl["clases_incluidas"] = pd.to_numeric(
+                    df_pl["clases_incluidas"], errors="coerce"
+                ).fillna(0)
+
+            return df_pl
+
         return pd.DataFrame()
+
     except Exception:
         return pd.DataFrame()
 
 
 def obtener_resumen_clases(df_clases, cedula):
-    """Calcula el progreso de clases leyendo la hoja Planes y cruzándola con Clases."""
+    """
+    Obtiene el plan activo del cliente y cuenta únicamente las clases
+    asociadas a ese plan mediante id_plan.
+
+    Los registros antiguos sin id_plan se conservan para consulta, pero
+    no se mezclan con el nuevo ciclo cuando existe un id_plan válido.
+    """
     resultado = {
         "plan": "Sin plan registrado",
+        "id_plan": "",
         "clases_contratadas": 0,
         "clases_tomadas": 0,
         "clases_restantes": 0,
@@ -682,43 +701,113 @@ def obtener_resumen_clases(df_clases, cedula):
         return resultado
 
     cedula_str = normalizar_cedula(cedula)
-    
-    # 1. Traer los datos reales de la pestaña Planes
+
+    # ------------------------------------------------------------
+    # 1. Obtener el último plan ACTIVO del cliente
+    # ------------------------------------------------------------
     df_planes = cargar_solo_planes()
 
-    # 2. Buscar el plan ACTIVO del cliente
     if not df_planes.empty and "cedula" in df_planes.columns:
+        df_planes = df_planes.copy()
         df_planes["_cedula_norm"] = df_planes["cedula"].apply(normalizar_cedula)
+
+        if "estado" not in df_planes.columns:
+            df_planes["estado"] = "Activo"
+
         planes_cliente = df_planes[
-            (df_planes["_cedula_norm"] == cedula_str) & 
-            (df_planes["estado"].astype(str).str.strip().str.lower() == "activo")
-        ]
+            (df_planes["_cedula_norm"] == cedula_str)
+            & (
+                df_planes["estado"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                == "activo"
+            )
+        ].copy()
+
         if not planes_cliente.empty:
             plan_activo = planes_cliente.iloc[-1]
-            resultado["plan"] = str(plan_activo.get("tipo_plan", ""))
-            resultado["clases_contratadas"] = int(pd.to_numeric(plan_activo.get("clases_incluidas", 0), errors="coerce"))
 
-    # 3. Contar las clases que ya han sido tomadas en la pestaña Clases
+            resultado["plan"] = str(plan_activo.get("tipo_plan", "")).strip()
+            resultado["id_plan"] = str(plan_activo.get("id_plan", "")).strip()
+
+            try:
+                resultado["clases_contratadas"] = int(
+                    float(
+                        pd.to_numeric(
+                            plan_activo.get("clases_incluidas", 0),
+                            errors="coerce",
+                        )
+                    )
+                )
+            except Exception:
+                resultado["clases_contratadas"] = 0
+
+    # ------------------------------------------------------------
+    # 2. Filtrar clases del cliente
+    # ------------------------------------------------------------
     if df_clases is not None and not df_clases.empty and "cedula" in df_clases.columns:
-        df_clases["_cedula_norm"] = df_clases["cedula"].apply(normalizar_cedula)
-        
-        # Asegurarnos de que exista la columna estado
-        if "estado" not in df_clases.columns:
-            df_clases["estado"] = "tomada"
-            
-        registros = df_clases[
-            (df_clases["_cedula_norm"] == cedula_str) &
-            (df_clases["estado"].astype(str).str.strip().str.lower() == "tomada")
-        ].copy()
-        
-        resultado["clases_tomadas"] = len(registros)
-        resultado["registros"] = registros.drop(columns=["_cedula_norm"], errors="ignore")
+        clases = df_clases.copy()
+        clases["_cedula_norm"] = clases["cedula"].apply(normalizar_cedula)
 
-    # 4. Calcular los totales y porcentajes
-    resultado["clases_restantes"] = max(resultado["clases_contratadas"] - resultado["clases_tomadas"], 0)
-    
+        if "estado" not in clases.columns:
+            clases["estado"] = "Tomada"
+
+        registros = clases[
+            (clases["_cedula_norm"] == cedula_str)
+            & (
+                clases["estado"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                == "tomada"
+            )
+        ].copy()
+
+        # --------------------------------------------------------
+        # 3. Si existe id_plan, las clases pertenecen SOLO a él.
+        # --------------------------------------------------------
+        id_plan_actual = resultado["id_plan"]
+
+        if id_plan_actual:
+            if "id_plan" in registros.columns:
+                registros["_id_plan_norm"] = (
+                    registros["id_plan"].fillna("").astype(str).str.strip()
+                )
+                registros = registros[
+                    registros["_id_plan_norm"] == id_plan_actual
+                ].copy()
+                registros = registros.drop(
+                    columns=["_id_plan_norm"],
+                    errors="ignore",
+                )
+            else:
+                # No mezclar clases históricas sin ID con el nuevo ciclo.
+                registros = registros.iloc[0:0].copy()
+
+        resultado["clases_tomadas"] = len(registros)
+        resultado["registros"] = registros.drop(
+            columns=["_cedula_norm"],
+            errors="ignore",
+        )
+
+    # ------------------------------------------------------------
+    # 4. Totales
+    # ------------------------------------------------------------
+    resultado["clases_restantes"] = max(
+        resultado["clases_contratadas"] - resultado["clases_tomadas"],
+        0,
+    )
+
     if resultado["clases_contratadas"] > 0:
-        resultado["porcentaje"] = min((resultado["clases_tomadas"] / resultado["clases_contratadas"]) * 100, 100)
+        resultado["porcentaje"] = min(
+            (
+                resultado["clases_tomadas"]
+                / resultado["clases_contratadas"]
+            )
+            * 100,
+            100,
+        )
 
     return resultado
 
@@ -1400,23 +1489,21 @@ else:
                     # CONFIGURACIÓN DEL PLAN
                     # ------------------------------------------------
                     st.markdown("---")
-                    st.markdown("#### ⚙️ Configuración del plan")
+                    st.markdown("#### ⚙️ Registrar un nuevo plan")
 
                     with st.form(f"form_config_clases_{id_cliente_clases}"):
                         col_plan1, col_plan2 = st.columns(2)
 
                         with col_plan1:
-                            opciones_plan = ["Premium", "Personalizado", "Otro"]
-                            plan_actual = resumen_actual["plan"]
-                            plan_cliente = st.selectbox(
-                                "Plan:",
-                                opciones_plan,
-                                index=(
-                                    opciones_plan.index(plan_actual)
-                                    if plan_actual in opciones_plan
-                                    else 0
+                            plan_cliente = st.text_input(
+                                "Tipo / nombre del plan:",
+                                value=(
+                                    resumen_actual["plan"]
+                                    if resumen_actual["plan"] != "Sin plan registrado"
+                                    else ""
                                 ),
-                            )
+                                placeholder="Ej: Premium, Básico, 3 días, Plan 12 clases...",
+                            ).strip()
 
                         with col_plan2:
                             clases_contratadas = st.number_input(
@@ -1432,27 +1519,40 @@ else:
                             )
 
                         st.caption(
-                            "La configuración inicia un nuevo ciclo. Las clases anteriores dejan de contar para este nuevo plan."
+                            "Cada vez que guardes un plan se crea una nueva contratación "
+                            "con un ID único. El plan anterior queda en el historial y "
+                            "las clases del nuevo plan comienzan desde cero."
                         )
 
                         guardar_config_plan = st.form_submit_button(
-                            "💾 Guardar configuración del plan",
+                            "💾 Registrar nuevo plan",
                             use_container_width=True,
                         )
 
                         if guardar_config_plan:
                             try:
-                                fecha_hoy_str = datetime.today().strftime('%d-%m-%Y')
+                                if not plan_cliente:
+                                    st.error("❌ Debes indicar el tipo o nombre del plan.")
+                                    st.stop()
+
+                                fecha_hoy_str = datetime.today().strftime("%d-%m-%Y")
+
+                                # ID único de la contratación.
+                                id_plan_nuevo = (
+                                    f"PLAN-{id_cliente_clases}-"
+                                    f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                )
 
                                 fila_config = [
                                     str(id_cliente_clases),         # 0: Cédula
                                     str(nombre_cliente_clases),     # 1: Nombre
                                     str(plan_cliente),              # 2: Tipo de Plan
                                     fecha_hoy_str,                  # 3: Fecha Inicio
-                                    "",                             # 4: Fecha Fin (vacío)
+                                    "",                             # 4: Fecha Fin
                                     "Activo",                       # 5: Estado
-                                    "Configuración del plan",       # 6: Observaciones
+                                    "Nueva contratación",           # 6: Observaciones
                                     int(clases_contratadas),        # 7: Clases Incluidas
+                                    str(id_plan_nuevo),              # 8: ID Plan
                                 ]
 
                                 respuesta_config = requests.post(
@@ -1469,16 +1569,23 @@ else:
                                 if resultado_config.get("status") == "error":
                                     st.error(
                                         "❌ Google Apps Script reportó un error: "
-                                        + str(resultado_config.get("message", "Error desconocido"))
+                                        + str(
+                                            resultado_config.get(
+                                                "message",
+                                                "Error desconocido",
+                                            )
+                                        )
                                     )
                                     st.stop()
 
                                 st.cache_data.clear()
-                                st.success("✅ Configuración del plan guardada correctamente.")
+                                st.success(
+                                    "✅ Nuevo plan registrado correctamente."
+                                )
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"❌ Error guardando el plan: {e}")
+                                st.error(f"❌ Error registrando el nuevo plan: {e}")
 
                     # ------------------------------------------------
                     # REGISTRAR CLASE TOMADA
@@ -1517,6 +1624,16 @@ else:
 
                                 fecha_clase_str = fecha_clase.strftime("%d-%m-%Y")
                                 clases_cliente = resumen_actual["registros"]
+                                id_plan_actual = str(
+                                    resumen_actual.get("id_plan", "")
+                                ).strip()
+
+                                if not id_plan_actual:
+                                    st.error(
+                                        "❌ El plan activo no tiene un ID de contratación. "
+                                        "Registra nuevamente el plan para iniciar el control de clases."
+                                    )
+                                    st.stop()
 
                                 if not clases_cliente.empty and "fecha_clase" in clases_cliente.columns:
                                     fechas_existentes = (
@@ -1542,8 +1659,9 @@ else:
                                     str(nombre_cliente_clases),
                                     str(fecha_clase_str),
                                     str(resumen_actual["plan"]),
-                                    "",
+                                    int(resumen_actual["clases_tomadas"]) + 1,
                                     "Tomada",
+                                    str(id_plan_actual),
                                 ]
 
                                 respuesta_clase = requests.post(
