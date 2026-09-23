@@ -314,6 +314,64 @@ def normalizar_cedula(valor):
 
 
 # ============================================================
+# CONVERTIR RESPUESTAS DE GOOGLE SHEETS A DATAFRAME
+# ============================================================
+
+def construir_dataframe(raw, columnas_default):
+    """
+    Acepta respuestas de Apps Script en cualquiera de estos formatos:
+    1) Matriz: [headers, fila1, fila2, ...]
+    2) Lista de diccionarios: [{...}, {...}]
+    3) Diccionario con data/rows/values
+    """
+    if raw is None:
+        return pd.DataFrame(columns=columnas_default)
+
+    # Si Apps Script devuelve un objeto, buscar el contenedor de filas.
+    if isinstance(raw, dict):
+        for clave in ("data", "rows", "values", "items", "result"):
+            if clave in raw and isinstance(raw[clave], (list, tuple)):
+                raw = raw[clave]
+                break
+        else:
+            # Un único registro como diccionario.
+            raw = [raw]
+
+    if not isinstance(raw, (list, tuple)) or len(raw) == 0:
+        return pd.DataFrame(columns=columnas_default)
+
+    # Lista de diccionarios.
+    if isinstance(raw[0], dict):
+        df = pd.DataFrame(list(raw))
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        return df
+
+    # Matriz de Google Sheets: primera fila = encabezados.
+    if isinstance(raw[0], (list, tuple)):
+        headers = [str(c).strip().lower() for c in raw[0]]
+        rows = list(raw[1:])
+        if not headers:
+            return pd.DataFrame(columns=columnas_default)
+
+        # Evita errores si alguna fila tiene menos/más columnas.
+        ancho = len(headers)
+        filas_limpias = []
+        for row in rows:
+            row = list(row) if isinstance(row, (list, tuple)) else [row]
+            if len(row) < ancho:
+                row += [""] * (ancho - len(row))
+            elif len(row) > ancho:
+                row = row[:ancho]
+            filas_limpias.append(row)
+
+        df = pd.DataFrame(filas_limpias, columns=headers)
+        df = df.loc[:, ~df.columns.duplicated()]
+        return df
+
+    return pd.DataFrame(columns=columnas_default)
+
+
+# ============================================================
 # CARGAR BASE DE DATOS
 # ============================================================
 
@@ -331,101 +389,46 @@ def cargar_bd():
         # USUARIOS
         # ====================================================
         usuarios_raw = res.get("usuarios", [])
-        if len(usuarios_raw) > 1:
-            columnas_u = [str(c).strip().lower() for c in usuarios_raw[0]]
-            df_u = pd.DataFrame(usuarios_raw[1:], columns=columnas_u)
-            df_u = df_u.loc[:, ~df_u.columns.duplicated()]
-        else:
-            df_u = pd.DataFrame(
-                columns=[
-                    "cedula",
-                    "nombre_completo",
-                    "whatsapp",
-                    "eps",
-                    "condiciones_medicas",
-                    "rol",
-                    "password",
-                    "fecha_registro",
-                ]
-            )
+        df_u = construir_dataframe(
+            usuarios_raw,
+            [
+                "cedula",
+                "nombre_completo",
+                "whatsapp",
+                "eps",
+                "condiciones_medicas",
+                "rol",
+                "password",
+                "fecha_registro",
+            ],
+        )
 
         # ====================================================
         # HISTORIAL DE MEDIDAS
         # ====================================================
         historial_raw = res.get("historial", [])
-        if len(historial_raw) > 1:
-            columnas_h = [str(c).strip().lower() for c in historial_raw[0]]
-            df_m = pd.DataFrame(historial_raw[1:], columns=columnas_h)
-            df_m = df_m.loc[:, ~df_m.columns.duplicated()]
-        else:
-            df_m = pd.DataFrame(
-                columns=[
-                    "id_registro",
-                    "fecha_evaluacion",
-                    "cedula",
-                    "edad",
-                    "sexo",
-                    "meta",
-                    "peso_kg",
-                    "estatura_cm",
-                    "cuello_cm",
-                    "hombros_cm",
-                    "bicep_der_cm",
-                    "bicep_izq_cm",
-                    "pecho_cm",
-                    "cintura_cm",
-                    "cadera_cm",
-                    "pierna_der_cm",
-                    "pierna_izq_cm",
-                    "gemelo_der_cm",
-                    "gemelo_izq_cm",
-                    "imc",
-                    "porcentaje_grasa",
-                    "calorias_objetivo",
-                    "edad_metabolica",
-                ]
-            )
+        df_m = construir_dataframe(
+            historial_raw,
+            ['id_registro', 'fecha_evaluacion', 'cedula', 'edad', 'sexo', 'meta', 'peso_kg', 'estatura_cm', 'cuello_cm', 'hombros_cm', 'bicep_der_cm', 'bicep_izq_cm', 'pecho_cm', 'cintura_cm', 'cadera_cm', 'pierna_der_cm', 'pierna_izq_cm', 'gemelo_der_cm', 'gemelo_izq_cm', 'imc', 'porcentaje_grasa', 'calorias_objetivo', 'edad_metabolica'],
+        )
 
         # ====================================================
         # PAGOS
         # ====================================================
         pagos_raw = res.get("pagos", [])
-        if len(pagos_raw) > 1:
-            columnas_p = [str(c).strip().lower() for c in pagos_raw[0]]
-            df_p = pd.DataFrame(pagos_raw[1:], columns=columnas_p)
-            df_p = df_p.loc[:, ~df_p.columns.duplicated()]
-        else:
-            df_p = pd.DataFrame(
-                columns=[
-                    "id_pago",
-                    "cedula",
-                    "fecha_pago",
-                    "valor",
-                    "concepto",
-                    "valor_mensualidad",
-                ]
-            )
+        df_p = construir_dataframe(
+            pagos_raw,
+            ['id_pago', 'cedula', 'fecha_pago', 'valor', 'concepto', 'valor_mensualidad'],
+        )
 
         # ====================================================
         # CLASES
         # ====================================================
         clases_raw = res.get("clases", [])
-        if len(clases_raw) > 1:
-            columnas_c = [str(c).strip().lower() for c in clases_raw[0]]
-            df_c = pd.DataFrame(clases_raw[1:], columns=columnas_c)
-            df_c = df_c.loc[:, ~df_c.columns.duplicated()]
-        else:
-            df_c = pd.DataFrame(
-                columns=[
-                    "id_clase",
-                    "cedula",
-                    "nombre_completo",
-                    "fecha_clase",
-                    "tipo_plan",
-                    "periodo",
-                    "estado",
-                ]
-            )
+        df_c = construir_dataframe(
+            clases_raw,
+            ['id_clase', 'cedula', 'nombre_completo', 'fecha_clase', 'tipo_plan', 'periodo', 'estado', 'id_plan'],
+        )
 
         # ====================================================
         # LIMPIAR CÉDULAS
@@ -652,26 +655,37 @@ def mostrar_graficos_evolucion(df_filtrado):
 
 @st.cache_data(ttl=10)
 def cargar_solo_planes():
-    """Descarga la hoja Planes y conserva el ID único de cada contratación."""
+    """Descarga Planes y normaliza su estructura, incluso si la API devuelve objetos."""
     try:
         res = requests.get(URL_API, timeout=30).json()
         planes_raw = res.get("planes", [])
-        if len(planes_raw) > 1:
-            col_pl = [str(c).strip().lower() for c in planes_raw[0]]
-            df_pl = pd.DataFrame(planes_raw[1:], columns=col_pl)
-            df_pl = df_pl.loc[:, ~df_pl.columns.duplicated()]
+        df_pl = construir_dataframe(
+            planes_raw,
+            [
+                "cedula",
+                "nombre_completo",
+                "tipo_plan",
+                "fecha_inicio",
+                "fecha_fin",
+                "estado",
+                "observaciones",
+                "clases_incluidas",
+                "id_plan",
+            ],
+        )
 
-            if "id_plan" not in df_pl.columns:
-                df_pl["id_plan"] = ""
-
+        if not df_pl.empty:
             if "clases_incluidas" in df_pl.columns:
                 df_pl["clases_incluidas"] = pd.to_numeric(
                     df_pl["clases_incluidas"], errors="coerce"
                 ).fillna(0)
 
-            return df_pl
+            if "fecha_inicio" in df_pl.columns:
+                df_pl["_fecha_inicio_dt"] = df_pl["fecha_inicio"].apply(parsear_fecha)
+            else:
+                df_pl["_fecha_inicio_dt"] = pd.NaT
 
-        return pd.DataFrame()
+        return df_pl
 
     except Exception:
         return pd.DataFrame()
@@ -679,15 +693,18 @@ def cargar_solo_planes():
 
 def obtener_resumen_clases(df_clases, cedula):
     """
-    Obtiene el plan activo del cliente y cuenta únicamente las clases
-    asociadas a ese plan mediante id_plan.
+    Obtiene el último plan activo del cliente y cuenta sus clases.
 
-    Los registros antiguos sin id_plan se conservan para consulta, pero
-    no se mezclan con el nuevo ciclo cuando existe un id_plan válido.
+    Compatible con la estructura actual de Google Sheets:
+    Planes: 8 columnas, sin id_plan.
+    Clases: 7 columnas, sin id_plan.
+
+    Si existe id_plan en una versión futura de la hoja, también lo utiliza.
     """
     resultado = {
         "plan": "Sin plan registrado",
         "id_plan": "",
+        "fecha_inicio": pd.NaT,
         "clases_contratadas": 0,
         "clases_tomadas": 0,
         "clases_restantes": 0,
@@ -695,10 +712,9 @@ def obtener_resumen_clases(df_clases, cedula):
         "registros": pd.DataFrame(),
     }
 
-    if not cedula:
-        return resultado
-
     cedula_str = normalizar_cedula(cedula)
+    if not cedula_str:
+        return resultado
 
     # ------------------------------------------------------------
     # 1. Obtener el último plan ACTIVO del cliente
@@ -706,28 +722,37 @@ def obtener_resumen_clases(df_clases, cedula):
     df_planes = cargar_solo_planes()
 
     if not df_planes.empty and "cedula" in df_planes.columns:
-        df_planes = df_planes.copy()
-        df_planes["_cedula_norm"] = df_planes["cedula"].apply(normalizar_cedula)
+        planes = df_planes.copy()
+        planes["_cedula_norm"] = planes["cedula"].apply(normalizar_cedula)
 
-        if "estado" not in df_planes.columns:
-            df_planes["estado"] = "Activo"
+        if "estado" not in planes.columns:
+            planes["estado"] = "Activo"
 
-        planes_cliente = df_planes[
-            (df_planes["_cedula_norm"] == cedula_str)
+        activos = planes[
+            (planes["_cedula_norm"] == cedula_str)
             & (
-                df_planes["estado"]
+                planes["estado"]
                 .astype(str)
                 .str.strip()
                 .str.lower()
-                == "activo"
+                .isin(["activo", "activa"])
             )
         ].copy()
 
-        if not planes_cliente.empty:
-            plan_activo = planes_cliente.iloc[-1]
+        if not activos.empty:
+            if "_fecha_inicio_dt" not in activos.columns:
+                activos["_fecha_inicio_dt"] = activos["fecha_inicio"].apply(parsear_fecha)
+
+            activos = activos.sort_values(
+                by="_fecha_inicio_dt",
+                ascending=True,
+                na_position="first",
+            )
+            plan_activo = activos.iloc[-1]
 
             resultado["plan"] = str(plan_activo.get("tipo_plan", "")).strip()
             resultado["id_plan"] = str(plan_activo.get("id_plan", "")).strip()
+            resultado["fecha_inicio"] = parsear_fecha(plan_activo.get("fecha_inicio"))
 
             try:
                 resultado["clases_contratadas"] = int(
@@ -763,25 +788,32 @@ def obtener_resumen_clases(df_clases, cedula):
         ].copy()
 
         # --------------------------------------------------------
-        # 3. Si existe id_plan, las clases pertenecen SOLO a él.
+        # 3. Asociar las clases al ciclo actual.
+        #    - Si hay id_plan en ambas tablas, usarlo.
+        #    - Si no existe (estructura actual), usar fecha_inicio.
         # --------------------------------------------------------
         id_plan_actual = resultado["id_plan"]
 
-        if id_plan_actual:
-            if "id_plan" in registros.columns:
-                registros["_id_plan_norm"] = (
-                    registros["id_plan"].fillna("").astype(str).str.strip()
-                )
-                registros = registros[
-                    registros["_id_plan_norm"] == id_plan_actual
-                ].copy()
-                registros = registros.drop(
-                    columns=["_id_plan_norm"],
-                    errors="ignore",
-                )
-            else:
-                # No mezclar clases históricas sin ID con el nuevo ciclo.
-                registros = registros.iloc[0:0].copy()
+        if id_plan_actual and "id_plan" in registros.columns:
+            registros["_id_plan_norm"] = (
+                registros["id_plan"].fillna("").astype(str).str.strip()
+            )
+            registros = registros[
+                registros["_id_plan_norm"] == id_plan_actual
+            ].copy()
+            registros = registros.drop(columns=["_id_plan_norm"], errors="ignore")
+
+        elif not pd.isna(resultado["fecha_inicio"]) and "fecha_clase" in registros.columns:
+            registros["_fecha_clase_dt"] = registros["fecha_clase"].apply(parsear_fecha)
+            registros = registros[
+                registros["_fecha_clase_dt"].notna()
+                & (registros["_fecha_clase_dt"] >= resultado["fecha_inicio"])
+            ].copy()
+            registros = registros.drop(columns=["_fecha_clase_dt"], errors="ignore")
+
+        elif id_plan_actual:
+            # Hay ID de plan, pero las clases no lo traen: no mezclar históricos.
+            registros = registros.iloc[0:0].copy()
 
         resultado["clases_tomadas"] = len(registros)
         resultado["registros"] = registros.drop(
@@ -1535,22 +1567,18 @@ else:
 
                                 fecha_hoy_str = datetime.today().strftime("%d-%m-%Y")
 
-                                # ID único de la contratación.
-                                id_plan_nuevo = (
-                                    f"PLAN-{id_cliente_clases}-"
-                                    f"{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
-                                )
-
+                                # Estructura ACTUAL de la hoja Planes:
+                                # cedula, nombre_completo, tipo_plan, fecha_inicio,
+                                # fecha_fin, estado, observaciones, clases_incluidas
                                 fila_config = [
-                                    str(id_cliente_clases),         # 0: Cédula
-                                    str(nombre_cliente_clases),     # 1: Nombre
-                                    str(plan_cliente),              # 2: Tipo de Plan
-                                    fecha_hoy_str,                  # 3: Fecha Inicio
-                                    "",                             # 4: Fecha Fin
-                                    "Activo",                       # 5: Estado
-                                    "Nueva contratación",           # 6: Observaciones
-                                    int(clases_contratadas),        # 7: Clases Incluidas
-                                    str(id_plan_nuevo),              # 8: ID Plan
+                                    str(id_cliente_clases),
+                                    str(nombre_cliente_clases),
+                                    str(plan_cliente),
+                                    fecha_hoy_str,
+                                    "",
+                                    "Activo",
+                                    "Nueva contratación",
+                                    int(clases_contratadas),
                                 ]
 
                                 respuesta_config = requests.post(
@@ -1626,13 +1654,6 @@ else:
                                     resumen_actual.get("id_plan", "")
                                 ).strip()
 
-                                if not id_plan_actual:
-                                    st.error(
-                                        "❌ El plan activo no tiene un ID de contratación. "
-                                        "Registra nuevamente el plan para iniciar el control de clases."
-                                    )
-                                    st.stop()
-
                                 if not clases_cliente.empty and "fecha_clase" in clases_cliente.columns:
                                     fechas_existentes = (
                                         clases_cliente["fecha_clase"]
@@ -1651,6 +1672,9 @@ else:
                                     f"{datetime.today().strftime('%H%M%S%f')}"
                                 )
 
+                                # Estructura ACTUAL de la hoja Clases:
+                                # id_clase, cedula, nombre_completo, fecha_clase,
+                                # tipo_plan, periodo, estado
                                 fila_clase = [
                                     str(id_clase),
                                     str(id_cliente_clases),
@@ -1659,7 +1683,6 @@ else:
                                     str(resumen_actual["plan"]),
                                     int(resumen_actual["clases_tomadas"]) + 1,
                                     "Tomada",
-                                    str(id_plan_actual),
                                 ]
 
                                 respuesta_clase = requests.post(
