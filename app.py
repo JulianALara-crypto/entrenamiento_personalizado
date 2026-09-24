@@ -375,7 +375,7 @@ def construir_dataframe(raw, columnas_default):
 # CARGAR BASE DE DATOS
 # ============================================================
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=300)
 def cargar_bd():
     try:
         respuesta = requests.get(
