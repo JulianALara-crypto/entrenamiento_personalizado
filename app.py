@@ -13,7 +13,7 @@ from PIL import Image
 # CONFIGURACIÓN GENERAL
 # ============================================================
 
-URL_API = ("https://script.google.com/macros/s/AKfycbwyWfxW2yEaa-9gI9VubX8s12QfkAaKJGeNeFFmQSkuNsyRYuFBQ0tmA3dd10jNK1N0/exec")
+URL_API = ("https://script.google.com/macros/s/AKfycbwS9DJyiUYu0pzdgQJZ1oQKmi-5xNpc1AnVIzCshixZDiGZiefKTypNBhWgz8jGt5OW/exec")
 
 
 # ============================================================
@@ -307,297 +307,111 @@ def link_whatsapp(
 
 @st.cache_data(ttl=60)
 def cargar_bd():
+    """Carga usuarios, historial y pagos desde Apps Script.
+
+    El Apps Script actual devuelve listas de diccionarios (objetos JSON),
+    no una matriz donde la primera fila sean encabezados. Esta función
+    admite ambos formatos para evitar perder registros.
+    """
+    columnas_usuarios = [
+        "cedula", "nombre_completo", "whatsapp", "eps",
+        "condiciones_medicas", "rol", "password", "fecha_registro"
+    ]
+    columnas_historial = [
+        "id_registro", "fecha_evaluacion", "cedula", "edad",
+        "sexo", "meta", "peso_kg", "estatura_cm",
+        "cuello_cm", "hombros_cm", "bicep_der_cm",
+        "bicep_izq_cm", "pecho_cm", "cintura_cm",
+        "cadera_cm", "pierna_der_cm", "pierna_izq_cm",
+        "gemelo_der_cm", "gemelo_izq_cm", "imc",
+        "porcentaje_grasa", "calorias_objetivo", "edad_metabolica"
+    ]
+    columnas_pagos = [
+        "id_pago", "cedula", "fecha_pago", "valor",
+        "concepto", "valor_mensualidad"
+    ]
+
+    def convertir_dataframe(datos, columnas_vacias):
+        if not isinstance(datos, list) or not datos:
+            return pd.DataFrame(columns=columnas_vacias)
+
+        # Formato actual de Apps Script: [{...}, {...}, ...]
+        if isinstance(datos[0], dict):
+            df = pd.DataFrame(datos)
+        # Compatibilidad con un API que devuelva [encabezados, fila, fila...]
+        elif isinstance(datos[0], (list, tuple)):
+            encabezados = [str(c).strip().lower() for c in datos[0]]
+            df = pd.DataFrame(datos[1:], columns=encabezados)
+        else:
+            return pd.DataFrame(columns=columnas_vacias)
+
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        df = df.loc[:, ~df.columns.duplicated()]
+        return df
 
     try:
-
-        respuesta = requests.get(
-            URL_API,
-            timeout=30
-        )
-
+        respuesta = requests.get(URL_API, timeout=30)
         respuesta.raise_for_status()
-
         res = respuesta.json()
 
+        if not isinstance(res, dict):
+            raise ValueError("La API no devolvió un objeto JSON válido.")
 
-        # ====================================================
-        # USUARIOS
-        # ====================================================
-
-        usuarios_raw = res.get(
-            "usuarios",
-            []
-        )
-
-        if len(usuarios_raw) > 1:
-
-            columnas_u = [
-                str(c)
-                .strip()
-                .lower()
-                for c in usuarios_raw[0]
-            ]
-
-            df_u = pd.DataFrame(
-                usuarios_raw[1:],
-                columns=columnas_u
+        if str(res.get("status", "success")).lower() == "error":
+            raise ValueError(
+                str(res.get("message", "Error desconocido de Google Apps Script."))
             )
 
-            df_u = df_u.loc[
-                :,
-                ~df_u.columns.duplicated()
-            ]
+        df_u = convertir_dataframe(res.get("usuarios", []), columnas_usuarios)
+        df_m = convertir_dataframe(res.get("historial", []), columnas_historial)
+        df_p = convertir_dataframe(res.get("pagos", []), columnas_pagos)
 
-        else:
-
-            df_u = pd.DataFrame(
-                columns=[
-                    "cedula",
-                    "nombre_completo",
-                    "whatsapp",
-                    "eps",
-                    "condiciones_medicas",
-                    "rol",
-                    "password",
-                    "fecha_registro",
-                ]
-            )
-
-
-        # ====================================================
-        # HISTORIAL DE MEDIDAS
-        # ====================================================
-
-        historial_raw = res.get(
-            "historial",
-            []
-        )
-
-        if len(historial_raw) > 1:
-
-            columnas_h = [
-                str(c)
-                .strip()
-                .lower()
-                for c in historial_raw[0]
-            ]
-
-            df_m = pd.DataFrame(
-                historial_raw[1:],
-                columns=columnas_h
-            )
-
-            df_m = df_m.loc[
-                :,
-                ~df_m.columns.duplicated()
-            ]
-
-        else:
-
-            df_m = pd.DataFrame(
-                columns=[
-                    "id_registro",
-                    "fecha_evaluacion",
-                    "cedula",
-                    "edad",
-                    "sexo",
-                    "meta",
-                    "peso_kg",
-                    "estatura_cm",
-                    "cuello_cm",
-                    "hombros_cm",
-                    "bicep_der_cm",
-                    "bicep_izq_cm",
-                    "pecho_cm",
-                    "cintura_cm",
-                    "cadera_cm",
-                    "pierna_der_cm",
-                    "pierna_izq_cm",
-                    "gemelo_der_cm",
-                    "gemelo_izq_cm",
-                    "imc",
-                    "porcentaje_grasa",
-                    "calorias_objetivo",
-                    "edad_metabolica",
-                ]
-            )
-
-
-        # ====================================================
-        # PAGOS
-        # ====================================================
-
-        pagos_raw = res.get(
-            "pagos",
-            []
-        )
-
-        if len(pagos_raw) > 1:
-
-            columnas_p = [
-                str(c)
-                .strip()
-                .lower()
-                for c in pagos_raw[0]
-            ]
-
-            df_p = pd.DataFrame(
-                pagos_raw[1:],
-                columns=columnas_p
-            )
-
-            df_p = df_p.loc[
-                :,
-                ~df_p.columns.duplicated()
-            ]
-
-        else:
-
-            df_p = pd.DataFrame(
-                columns=[
-                    "id_pago",
-                    "cedula",
-                    "fecha_pago",
-                    "valor",
-                    "concepto",
-                    "valor_mensualidad",
-                ]
-            )
-
-
-        # ====================================================
-        # LIMPIAR CÉDULAS
-        # ====================================================
-
+        # Normalizar cédulas sin eliminar filas.
         for dataframe in (df_u, df_m, df_p):
-
-            if (
-                not dataframe.empty
-                and "cedula" in dataframe.columns
-            ):
-
+            if "cedula" in dataframe.columns:
                 dataframe["cedula"] = (
                     dataframe["cedula"]
                     .astype(str)
-                    .str.replace(
-                        r"\.0$",
-                        "",
-                        regex=True
-                    )
+                    .str.replace(r"\.0$", "", regex=True)
                     .str.strip()
                 )
 
-
-        # ====================================================
-        # CONVERTIR COLUMNAS NUMÉRICAS DE MEDIDAS
-        # ====================================================
-
+        # Columnas numéricas de medidas.
         columnas_numericas_medidas = [
-
-            "edad",
-            "peso_kg",
-            "estatura_cm",
-            "cuello_cm",
-            "hombros_cm",
-            "bicep_der_cm",
-            "bicep_izq_cm",
-            "pecho_cm",
-            "cintura_cm",
-            "cadera_cm",
-            "pierna_der_cm",
-            "pierna_izq_cm",
-            "gemelo_der_cm",
-            "gemelo_izq_cm",
-            "imc",
-            "porcentaje_grasa",
-            "calorias_objetivo",
-            "edad_metabolica",
-
+            "edad", "peso_kg", "estatura_cm", "cuello_cm",
+            "hombros_cm", "bicep_der_cm", "bicep_izq_cm",
+            "pecho_cm", "cintura_cm", "cadera_cm",
+            "pierna_der_cm", "pierna_izq_cm", "gemelo_der_cm",
+            "gemelo_izq_cm", "imc", "porcentaje_grasa",
+            "calorias_objetivo", "edad_metabolica"
         ]
-
-
         for columna in columnas_numericas_medidas:
-
             if columna in df_m.columns:
+                df_m[columna] = pd.to_numeric(df_m[columna], errors="coerce")
 
-                df_m[columna] = pd.to_numeric(
-                    df_m[columna],
-                    errors="coerce"
-                )
-
-
-        # ====================================================
-        # CONVERTIR COLUMNAS NUMÉRICAS DE PAGOS
-        # ====================================================
-
-        for columna in [
-            "valor",
-            "valor_mensualidad",
-        ]:
-
+        # Columnas numéricas de pagos.
+        for columna in ("valor", "valor_mensualidad"):
             if columna in df_p.columns:
+                df_p[columna] = pd.to_numeric(df_p[columna], errors="coerce")
 
-                df_p[columna] = pd.to_numeric(
-                    df_p[columna],
-                    errors="coerce"
-                )
+        # Fechas para mostrar siempre en formato dd-mm-YYYY.
+        if "fecha_registro" in df_u.columns:
+            df_u["fecha_registro"] = df_u["fecha_registro"].apply(formatear_fecha)
 
+        if "fecha_evaluacion" in df_m.columns:
+            df_m["fecha_evaluacion"] = df_m["fecha_evaluacion"].apply(formatear_fecha)
 
-        # ====================================================
-        # FECHAS
-        # ====================================================
+        if "fecha_pago" in df_p.columns:
+            df_p["fecha_pago"] = df_p["fecha_pago"].apply(formatear_fecha)
 
-        if (
-            not df_u.empty
-            and "fecha_registro" in df_u.columns
-        ):
-
-            df_u["fecha_registro"] = (
-                df_u["fecha_registro"]
-                .apply(formatear_fecha)
-            )
-
-
-        if (
-            not df_m.empty
-            and "fecha_evaluacion" in df_m.columns
-        ):
-
-            df_m["fecha_evaluacion"] = (
-                df_m["fecha_evaluacion"]
-                .apply(formatear_fecha)
-            )
-
-
-        if (
-            not df_p.empty
-            and "fecha_pago" in df_p.columns
-        ):
-
-            df_p["fecha_pago"] = (
-                df_p["fecha_pago"]
-                .apply(formatear_fecha)
-            )
-
-
-        return (
-            df_u,
-            df_m,
-            df_p
-        )
-
+        return df_u, df_m, df_p
 
     except Exception as e:
-
-        st.error(
-            "Error procesando base de datos: "
-            f"{e}"
-        )
-
+        st.error(f"Error procesando base de datos: {e}")
         return (
-            pd.DataFrame(),
-            pd.DataFrame(),
-            pd.DataFrame()
+            pd.DataFrame(columns=columnas_usuarios),
+            pd.DataFrame(columns=columnas_historial),
+            pd.DataFrame(columns=columnas_pagos),
         )
 
 
