@@ -972,31 +972,54 @@ if not st.session_state["autenticado"]:
                 elif not df_usuarios.empty and reg_cedula in df_usuarios["cedula"].values:
                     st.error("❌ Esta cédula ya está registrada.")
                 else:
-                    nueva_fila = [
-                        reg_cedula,
-                        reg_nombre,
-                        reg_whatsapp,
-                        reg_eps if reg_eps else "NINGUNA",
-                        reg_condiciones if reg_condiciones else "NINGUNA",
-                        "Cliente",
-                        reg_pass,
-                        datetime.today().strftime("%d-%m-%Y"),
-                    ]
+                    datos_usuario = {
+                        "action": "registrar_usuario",
+                        "cedula": str(reg_cedula).strip(),
+                        "nombre_completo": str(reg_nombre).strip(),
+                        "whatsapp": str(reg_whatsapp).strip(),
+                        "eps": reg_eps if reg_eps else "NINGUNA",
+                        "condiciones_medicas": (
+                            reg_condiciones
+                            if reg_condiciones
+                            else "NINGUNA"
+                        ),
+                        "rol": "Cliente",
+                        "password": str(reg_pass),
+                        "fecha_registro": datetime.today().strftime("%d-%m-%Y"),
+                    }
 
                     try:
                         respuesta_registro = requests.post(
                             URL_API,
-                            json={
-                                "action": "registrar_usuario",
-                                "row": nueva_fila,
-                            },
+                            json=datos_usuario,
                             timeout=30,
                         )
                         respuesta_registro.raise_for_status()
-                        st.cache_data.clear()
-                        st.success("¡Perfil creado con éxito! Ya puedes iniciar sesión.")
+
+                        try:
+                            resultado_registro = respuesta_registro.json()
+                        except Exception:
+                            resultado_registro = {}
+
+                        if str(resultado_registro.get("status", "")).lower() == "error":
+                            st.error(
+                                "❌ Google Apps Script reportó un error: "
+                                + str(
+                                    resultado_registro.get(
+                                        "message",
+                                        "No fue posible registrar el usuario.",
+                                    )
+                                )
+                            )
+                        else:
+                            st.cache_data.clear()
+                            st.success(
+                                "✅ Perfil creado correctamente. "
+                                "Ya puedes iniciar sesión con tu cédula y contraseña."
+                            )
+
                     except Exception as e:
-                        st.error(f"Error al guardar usuario: {e}")
+                        st.error(f"❌ Error al guardar usuario: {e}")
 
 # ============================================================
 # APLICACIÓN AUTENTICADA
