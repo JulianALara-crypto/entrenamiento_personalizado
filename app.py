@@ -372,7 +372,71 @@ def construir_dataframe(raw, columnas_default):
 
 
 # ============================================================
-# CARGAR BASE DE DATOS
+# CARGAR SOLO USUARIOS PARA LOGIN / REGISTRO
+# ============================================================
+
+@st.cache_data(ttl=5)
+def cargar_usuarios_login():
+    """
+    Consulta únicamente la hoja Usuarios mediante el endpoint
+    action=usuarios. Esto evita descargar Historial, Pagos y Clases
+    cada vez que alguien intenta iniciar sesión.
+
+    Retorna: (df_usuarios, error)
+    error = None si la consulta fue exitosa.
+    """
+    try:
+        respuesta = requests.get(
+            URL_API,
+            params={"action": "usuarios"},
+            timeout=15,
+        )
+        respuesta.raise_for_status()
+        res = respuesta.json()
+
+        if not isinstance(res, dict):
+            return pd.DataFrame(), "La API no devolvió una respuesta válida."
+
+        if str(res.get("status", "success")).lower() == "error":
+            return pd.DataFrame(), str(
+                res.get("message", "Error desconocido de Google Apps Script.")
+            )
+
+        usuarios_raw = res.get("usuarios", [])
+        df_u = construir_dataframe(
+            usuarios_raw,
+            [
+                "cedula",
+                "nombre_completo",
+                "whatsapp",
+                "eps",
+                "condiciones_medicas",
+                "rol",
+                "password",
+                "fecha_registro",
+            ],
+        )
+
+        if not df_u.empty and "cedula" in df_u.columns:
+            df_u["cedula"] = df_u["cedula"].apply(normalizar_cedula)
+
+        return df_u, None
+
+    except requests.exceptions.Timeout:
+        return (
+            pd.DataFrame(),
+            "Google Apps Script tardó demasiado en responder. Intenta nuevamente en unos segundos.",
+        )
+    except requests.exceptions.RequestException as e:
+        return pd.DataFrame(), f"No fue posible conectar con Google Apps Script: {e}"
+    except ValueError:
+        return pd.DataFrame(), "Google Apps Script devolvió una respuesta que no es JSON válido."
+    except Exception as e:
+        return pd.DataFrame(), f"Error procesando usuarios: {e}"
+
+
+# ============================================================
+# CARGAR BASE DE DATOS COMPLETA
 # ============================================================
 
 @st.cache_data(ttl=10)
@@ -931,9 +995,16 @@ if not st.session_state["autenticado"]:
                 st.session_state["nombre"] = "JULIAN AVILA"
                 st.rerun()
             else:
-                df_usuarios, _, _, _ = cargar_bd()
+                # Para iniciar sesión consultamos únicamente Usuarios.
+                # No descargamos Historial, Pagos ni Clases hasta que
+                # la autenticación haya sido confirmada.
+                df_usuarios, error_usuarios = cargar_usuarios_login()
 
-                if not df_usuarios.empty and cedula_ingreso in df_usuarios["cedula"].values:
+                if error_usuarios:
+                    st.error(f"⚠️ {error_usuarios}")
+                elif df_usuarios.empty or "cedula" not in df_usuarios.columns:
+                    st.error("❌ No fue posible verificar los usuarios en este momento. Intenta nuevamente.")
+                elif cedula_ingreso in df_usuarios["cedula"].values:
                     u = df_usuarios[df_usuarios["cedula"] == cedula_ingreso].iloc[0]
 
                     if str(u["password"]).strip() == pass_ingreso:
@@ -965,9 +1036,12 @@ if not st.session_state["autenticado"]:
             reg_pass = st.text_input("Crea tu Contraseña:", type="password").strip()
 
             if st.form_submit_button("Crear Perfil"):
-                df_usuarios, _, _, _ = cargar_bd()
+                # Para validar duplicados consultamos únicamente Usuarios.
+                df_usuarios, error_usuarios = cargar_usuarios_login()
 
-                if not reg_cedula or not reg_nombre or not reg_pass:
+                if error_usuarios:
+                    st.error(f"⚠️ {error_usuarios}")
+                elif not reg_cedula or not reg_nombre or not reg_pass:
                     st.error("⚠️ Cédula, Nombre y Contraseña son obligatorios.")
                 elif not df_usuarios.empty and reg_cedula in df_usuarios["cedula"].values:
                     st.error("❌ Esta cédula ya está registrada.")
