@@ -1131,12 +1131,39 @@ else:
                             int(edad_bio),
                         ]
 
+                        # Apps Script espera los campos directamente, no dentro de "row".
+                        # Enviar la cédula explícitamente evita el error:
+                        # "La cédula es obligatoria."
+                        datos_medidas = {
+                            "action": "guardar_medidas",
+                            "id_registro": str(id_reg),
+                            "fecha_evaluacion": str(fecha_hoy),
+                            "cedula": str(st.session_state["cedula"]).strip(),
+                            "edad": int(edad),
+                            "sexo": str(sexo),
+                            "meta": str(meta),
+                            "peso_kg": float(peso),
+                            "estatura_cm": float(estatura),
+                            "cuello_cm": float(cuello),
+                            "hombros_cm": float(hombros),
+                            "bicep_der_cm": float(bicep_der),
+                            "bicep_izq_cm": float(bicep_izq),
+                            "pecho_cm": float(pecho),
+                            "cintura_cm": float(cintura),
+                            "cadera_cm": float(cadera),
+                            "pierna_der_cm": float(pierna_der),
+                            "pierna_izq_cm": float(pierna_izq),
+                            "gemelo_der_cm": float(gemelo_der),
+                            "gemelo_izq_cm": float(gemelo_izq),
+                            "imc": float(imc),
+                            "porcentaje_grasa": float(grasa),
+                            "calorias_objetivo": int(cals),
+                            "edad_metabolica": int(edad_bio),
+                        }
+
                         respuesta_medidas = requests.post(
                             URL_API,
-                            json={
-                                "action": "guardar_medidas",
-                                "row": fila_medidas,
-                            },
+                            json=datos_medidas,
                             timeout=30,
                         )
                         respuesta_medidas.raise_for_status()
