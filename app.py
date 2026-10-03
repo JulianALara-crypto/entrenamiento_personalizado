@@ -274,31 +274,38 @@ def calcular_metricas(
     # ============================================================
     # EDAD METABÓLICA - ESTIMACIÓN ORIENTATIVA
     #
-    # Se calcula primero la TMB por masa magra (Katch-McArdle) y
-    # después se obtiene la edad equivalente mediante Mifflin-St Jeor.
-    # Como esta métrica no es clínica, se limita a 15-90 años para
-    # evitar valores absurdos cuando las dos ecuaciones difieren mucho.
+    # Se utiliza la composición corporal para obtener una TMB por
+    # Katch-McArdle y luego se calcula una edad equivalente con
+    # Mifflin-St Jeor. Para evitar que la diferencia entre ambas
+    # ecuaciones produzca valores exagerados, el resultado se acerca
+    # de forma conservadora a la edad real del cliente.
+    #
+    # IMPORTANTE: es un indicador orientativo, no una medición clínica.
     # ============================================================
     masa_magra = peso * (1.0 - pct_grasa / 100.0)
-    tmb_masa_magra = 370.0 + (21.6 * masa_magra)
+    tmb_composicion = 370.0 + (21.6 * masa_magra)
 
     if sexo == "Masculino":
-        edad_metabolica = (
-            10 * peso
-            + 6.25 * estatura_cm
-            + 5
-            - tmb_masa_magra
-        ) / 5.0
+        constante_sexo = 5.0
     else:
-        edad_metabolica = (
-            10 * peso
-            + 6.25 * estatura_cm
-            - 161
-            - tmb_masa_magra
-        ) / 5.0
+        constante_sexo = -161.0
+
+    edad_equivalente = (
+        10 * peso
+        + 6.25 * estatura_cm
+        + constante_sexo
+        - tmb_composicion
+    ) / 5.0
+
+    # Suavizado conservador: solo el 35 % de la diferencia se refleja
+    # en la edad metabólica para reducir el efecto de error acumulado
+    # entre las ecuaciones de composición corporal y TMB.
+    diferencia_edad = edad_equivalente - edad
+    diferencia_edad = max(-10.0, min(diferencia_edad, 10.0))
+    edad_metabolica = edad + (diferencia_edad * 0.35)
 
     edad_metabolica = int(round(edad_metabolica))
-    edad_metabolica = max(15, min(edad_metabolica, 90))
+    edad_metabolica = max(18, min(edad_metabolica, 80))
 
     return (
         round(imc, 2),
@@ -890,7 +897,7 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
         ("% Grasa corporal", "porcentaje_grasa", "%", 2),
         ("IMC", "imc", "", 2),
         ("Calorías objetivo", "calorias_objetivo", "kcal", 0),
-        ("Edad metabólica", "edad_metabolica", "años", 0),
+        ("Edad metabólica estimada", "edad_metabolica", "años", 0),
     ]
     resumen_data = [[
         Paragraph("Indicador", table_header), Paragraph("Inicial", table_header),
@@ -924,6 +931,10 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
     story.append(Paragraph(
         "Los cambios se muestran de forma descriptiva entre la primera y la última evaluación registrada. "
         "La interpretación debe considerar el objetivo individual y el contexto de cada evaluación.", note
+    ))
+    story.append(Paragraph(
+        "La edad metabólica es un indicador estimado y orientativo calculado a partir de ecuaciones antropométricas y de metabolismo basal. "
+        "No constituye una medición clínica ni debe interpretarse de forma aislada.", note
     ))
 
     # Tabla antropométrica completa
