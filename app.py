@@ -829,6 +829,12 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
     small = ParagraphStyle(
         "SmallInforme", parent=normal, fontSize=7.5, leading=9.5,
     )
+    # Estilo específico para encabezados de tablas.
+    # Las tablas tienen fondo negro, por lo que el texto debe ser blanco.
+    table_header = ParagraphStyle(
+        "TableHeaderInforme", parent=small, fontName="Helvetica-Bold",
+        textColor=colors.white, alignment=TA_CENTER,
+    )
     note = ParagraphStyle(
         "NotaInforme", parent=normal, fontSize=7.5, leading=10,
         textColor=colors.HexColor("#555555"),
@@ -887,8 +893,8 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
         ("Edad metabólica", "edad_metabolica", "años", 0),
     ]
     resumen_data = [[
-        Paragraph("Indicador", small), Paragraph("Inicial", small),
-        Paragraph("Actual", small), Paragraph("Cambio", small)
+        Paragraph("Indicador", table_header), Paragraph("Inicial", table_header),
+        Paragraph("Actual", table_header), Paragraph("Cambio", table_header)
     ]]
     for etiqueta, campo, sufijo, dec in resumen_campos:
         vi = valor_fila(inicial, campo)
@@ -936,8 +942,8 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
         ("Gemelo Izquierdo", "gemelo_izq_cm"),
     ]
     ant_data = [[
-        Paragraph("Medida", small), Paragraph("Inicial (cm)", small),
-        Paragraph("Actual (cm)", small), Paragraph("Cambio (cm)", small)
+        Paragraph("Medida", table_header), Paragraph("Inicial (cm)", table_header),
+        Paragraph("Actual (cm)", table_header), Paragraph("Cambio (cm)", table_header)
     ]]
     for etiqueta, campo in antropometricos:
         vi = valor_fila(inicial, campo)
@@ -978,7 +984,7 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
         ("Gemelo D (cm)", "gemelo_der_cm"),
         ("Gemelo I (cm)", "gemelo_izq_cm"),
     ]
-    hist_data = [[Paragraph(x[0], small) for x in historia_campos]]
+    hist_data = [[Paragraph(x[0], table_header) for x in historia_campos]]
     for _, row in df.iterrows():
         fila = []
         for etiqueta, campo in historia_campos:
@@ -1009,8 +1015,8 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
     story.append(Spacer(1, 0.25 * cm))
     story.append(Paragraph("4. Datos complementarios", h2))
     comp_data = [[
-        Paragraph("Fecha", small), Paragraph("Edad", small), Paragraph("Sexo", small),
-        Paragraph("Meta", small), Paragraph("Calorías", small), Paragraph("Edad metabólica", small)
+        Paragraph("Fecha", table_header), Paragraph("Edad", table_header), Paragraph("Sexo", table_header),
+        Paragraph("Meta", table_header), Paragraph("Calorías", table_header), Paragraph("Edad metabólica", table_header)
     ]]
     for _, row in df.iterrows():
         comp_data.append([
