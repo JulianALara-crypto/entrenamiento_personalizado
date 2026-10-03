@@ -2237,7 +2237,13 @@ else:
                                     URL_API,
                                     json={
                                         "action": "guardar_clase",
-                                        "row": fila_clase,
+                                        "id_clase": str(id_clase),
+                                        "cedula": str(id_cliente_clases).strip(),
+                                        "nombre_completo": str(nombre_cliente_clases).strip(),
+                                        "fecha_clase": str(fecha_clase_str),
+                                        "tipo_plan": str(resumen_actual["plan"]).strip(),
+                                        "periodo": int(resumen_actual["clases_tomadas"]) + 1,
+                                        "estado": "Tomada",
                                     },
                                     timeout=30,
                                 )
