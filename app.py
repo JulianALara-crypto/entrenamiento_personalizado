@@ -728,6 +728,66 @@ def mostrar_graficos_evolucion(df_filtrado):
             st.info("No hay medidas de glúteos/cadera o gemelos registradas.")
 
 
+
+@st.cache_data(ttl=10)
+def cargar_solo_planes():
+    """Carga la hoja Planes de la API y la normaliza de forma segura."""
+    try:
+        respuesta = requests.get(
+            URL_API,
+            params={"action": "planes"},
+            timeout=30,
+        )
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+
+        # Algunas versiones del Apps Script devuelven {planes: [...]};
+        # otras pueden devolver directamente una lista.
+        if isinstance(datos, dict):
+            planes_raw = datos.get("planes", [])
+        elif isinstance(datos, list):
+            planes_raw = datos
+        else:
+            planes_raw = []
+
+        df_planes = construir_dataframe(
+            planes_raw,
+            [
+                "cedula",
+                "nombre_completo",
+                "tipo_plan",
+                "fecha_inicio",
+                "fecha_fin",
+                "estado",
+                "observaciones",
+                "clases_incluidas",
+                "id_plan",
+            ],
+        )
+
+        if df_planes.empty:
+            return df_planes
+
+        if "cedula" in df_planes.columns:
+            df_planes["cedula"] = df_planes["cedula"].apply(normalizar_cedula)
+
+        if "clases_incluidas" in df_planes.columns:
+            df_planes["clases_incluidas"] = pd.to_numeric(
+                df_planes["clases_incluidas"], errors="coerce"
+            ).fillna(0)
+
+        if "fecha_inicio" in df_planes.columns:
+            df_planes["_fecha_inicio_dt"] = df_planes["fecha_inicio"].apply(parsear_fecha)
+        else:
+            df_planes["_fecha_inicio_dt"] = pd.NaT
+
+        return df_planes
+
+    except Exception:
+        # El resumen de clases no debe tumbar toda la aplicación si Planes
+        # no responde temporalmente.
+        return pd.DataFrame()
+
 def obtener_resumen_clases(df_clases, cedula):
     """
     Obtiene el último plan activo del cliente y cuenta sus clases.
