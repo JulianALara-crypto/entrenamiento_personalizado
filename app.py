@@ -155,6 +155,210 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ============================================================
+# INTERFAZ PREMIUM FITNESS 2.0
+# Capa exclusivamente visual: no modifica la lógica de negocio.
+# ============================================================
+st.markdown(
+    """
+    <style>
+
+    /* ---------- Fondo y profundidad general ---------- */
+    .stApp {
+        background:
+            radial-gradient(circle at 12% 8%, rgba(255,255,255,0.055), transparent 24%),
+            radial-gradient(circle at 88% 18%, rgba(120,120,120,0.045), transparent 22%),
+            linear-gradient(135deg, #030303 0%, #080808 48%, #020202 100%) !important;
+    }
+
+    .main .block-container {
+        max-width: 1450px;
+        padding-top: 1.4rem;
+        padding-bottom: 3rem;
+    }
+
+    /* ---------- Títulos ---------- */
+    h1 {
+        font-weight: 800 !important;
+        letter-spacing: 1.2px !important;
+        text-shadow: 0 3px 18px rgba(255,255,255,0.10);
+    }
+
+    h2, h3, h4 {
+        letter-spacing: 0.35px;
+    }
+
+    /* ---------- Botones premium ---------- */
+    div.stButton > button,
+    div.stFormSubmitButton > button,
+    div.stDownloadButton > button {
+        border: 1px solid #353535 !important;
+        border-radius: 14px !important;
+        min-height: 46px !important;
+        padding: 0.55rem 1.1rem !important;
+        background: linear-gradient(145deg, #202020 0%, #0d0d0d 100%) !important;
+        color: #f5f5f5 !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.25px !important;
+        box-shadow: 0 7px 18px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease !important;
+    }
+
+    div.stButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    div.stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        border-color: #666666 !important;
+        background: linear-gradient(145deg, #2b2b2b 0%, #111111 100%) !important;
+        box-shadow: 0 12px 25px rgba(0,0,0,0.52), inset 0 1px 0 rgba(255,255,255,0.09) !important;
+    }
+
+    div.stButton > button:active,
+    div.stFormSubmitButton > button:active,
+    div.stDownloadButton > button:active {
+        transform: translateY(1px) scale(0.99) !important;
+    }
+
+    /* ---------- Inputs ---------- */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="select"] > div {
+        background: linear-gradient(145deg, #151515, #0b0b0b) !important;
+        border: 1px solid #303030 !important;
+        border-radius: 12px !important;
+        box-shadow: inset 0 1px 7px rgba(0,0,0,0.35) !important;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+    }
+
+    div[data-baseweb="input"] > div:focus-within,
+    div[data-baseweb="textarea"] > div:focus-within,
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: #666666 !important;
+        box-shadow: 0 0 0 1px #555555, 0 0 18px rgba(255,255,255,0.06) !important;
+    }
+
+    input, textarea {
+        color: #f2f2f2 !important;
+    }
+
+    /* ---------- Métricas ---------- */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(145deg, rgba(28,28,28,0.96), rgba(8,8,8,0.96));
+        border: 1px solid #292929;
+        border-radius: 18px;
+        padding: 18px 18px 14px 18px;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.045);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        border-color: #454545;
+        box-shadow: 0 16px 34px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: #9f9f9f !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+    }
+
+    /* ---------- Formularios / contenedores ---------- */
+    div[data-testid="stForm"] {
+        background: linear-gradient(145deg, rgba(18,18,18,0.92), rgba(7,7,7,0.92));
+        border: 1px solid #262626;
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: 0 14px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+
+    /* ---------- Sidebar ---------- */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #080808 0%, #030303 100%) !important;
+        border-right: 1px solid #242424;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button {
+        border-radius: 12px !important;
+    }
+
+    section[data-testid="stSidebar"] label {
+        transition: background 0.18s ease, transform 0.18s ease;
+        border-radius: 10px;
+        padding: 4px 6px;
+    }
+
+    section[data-testid="stSidebar"] label:hover {
+        background: rgba(255,255,255,0.045);
+        transform: translateX(2px);
+    }
+
+    /* ---------- Tarjetas personalizadas existentes ---------- */
+    .clase-card {
+        background: linear-gradient(145deg, #171717, #080808) !important;
+        border: 1px solid #292929 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .clase-card:hover {
+        transform: translateY(-2px);
+        border-color: #444444 !important;
+    }
+
+    /* ---------- Separadores ---------- */
+    hr {
+        border-color: #252525 !important;
+    }
+
+    /* ---------- Expander ---------- */
+    div[data-testid="stExpander"] {
+        border: 1px solid #282828 !important;
+        border-radius: 16px !important;
+        background: rgba(10,10,10,0.72) !important;
+        box-shadow: 0 9px 25px rgba(0,0,0,0.25);
+    }
+
+    /* ---------- Dataframes ---------- */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #292929;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.28);
+    }
+
+    /* ---------- Logo ---------- */
+    .logo-premium {
+        filter: drop-shadow(0 10px 22px rgba(255,255,255,0.08));
+    }
+
+    /* ---------- Mobile ---------- */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 0.8rem;
+            padding-right: 0.8rem;
+        }
+
+        .ui-module-header {
+            padding: 10px 12px;
+        }
+
+        .ui-module-icon {
+            width: 48px;
+            height: 48px;
+        }
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def icono_ui(clase, tamano=28):
     return (
