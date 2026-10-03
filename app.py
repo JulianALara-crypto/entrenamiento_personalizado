@@ -2554,7 +2554,15 @@ else:
 
                                             respuesta_pago = requests.post(
                                                 URL_API,
-                                                json={"action": "guardar_pago", "row": fila_pago},
+                                                json={
+                                                    "action": "guardar_pago",
+                                                    "id_pago": str(id_pago),
+                                                    "cedula": str(id_cliente).strip(),
+                                                    "fecha_pago": str(fecha_pago),
+                                                    "valor": float(valor_pago),
+                                                    "concepto": str(concepto_pago).strip(),
+                                                    "valor_mensualidad": float(valor_mensualidad),
+                                                },
                                                 timeout=30,
                                             )
                                             respuesta_pago.raise_for_status()
@@ -2747,7 +2755,14 @@ else:
                                     URL_API,
                                     json={
                                         "action": "guardar_plan",
-                                        "row": fila_config,
+                                        "cedula": str(id_cliente_clases).strip(),
+                                        "nombre_completo": str(nombre_cliente_clases).strip(),
+                                        "tipo_plan": str(plan_cliente).strip(),
+                                        "fecha_inicio": str(fecha_hoy_str),
+                                        "fecha_fin": "",
+                                        "estado": "Activo",
+                                        "observaciones": "Nueva contratación",
+                                        "clases_incluidas": int(clases_contratadas),
                                     },
                                     timeout=30,
                                 )
