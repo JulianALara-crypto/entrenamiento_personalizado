@@ -1,3 +1,4 @@
+import math
 import os
 import urllib.parse
 from datetime import datetime, date
@@ -512,7 +513,67 @@ st.markdown(
         }
     }
 
-\n\n    /* ========================================================\n       GLASS VIVO / MICROANIMACIONES PREMIUM\n       Solo visual: no altera la lógica de Streamlit.\n       ======================================================== */\n\n    .stApp {\n        background:\n            radial-gradient(circle at 12% 18%, rgba(255,255,255,0.075), transparent 20%),\n            radial-gradient(circle at 86% 12%, rgba(130,130,130,0.065), transparent 22%),\n            radial-gradient(circle at 50% 88%, rgba(255,255,255,0.035), transparent 25%),\n            linear-gradient(135deg, #020202 0%, #090909 48%, #020202 100%) !important;\n        background-size: 140% 140%;\n        animation: glassAmbient 18s ease-in-out infinite alternate;\n    }\n\n    @keyframes glassAmbient {\n        0% { background-position: 0% 0%; }\n        50% { background-position: 100% 35%; }\n        100% { background-position: 35% 100%; }\n    }\n\n    /* Luz ambiental muy suave que recorre el cristal */\n    div[data-testid="stMetric"]::after,\n    div[data-testid="stForm"]::after,\n    div[data-testid="stExpander"]::after,\n    .clase-card::after,\n    .ui-module-header::after {\n        animation: glassShimmer 7s ease-in-out infinite;\n    }\n\n    @keyframes glassShimmer {\n        0%, 100% { opacity: 0.18; transform: translateX(-35%) rotate(24deg); }\n        50% { opacity: 0.52; transform: translateX(115%) rotate(24deg); }\n    }\n\n    /* Tarjetas con una pequeña sensación de objeto flotante */\n    div[data-testid="stMetric"] {\n        animation: cardFloat 6s ease-in-out infinite;\n    }\n\n    div[data-testid="stMetric"]:nth-child(2) { animation-delay: -1.2s; }\n    div[data-testid="stMetric"]:nth-child(3) { animation-delay: -2.4s; }\n    div[data-testid="stMetric"]:nth-child(4) { animation-delay: -3.6s; }\n\n    @keyframes cardFloat {\n        0%, 100% { transform: translateY(0px); }\n        50% { transform: translateY(-3px); }\n    }\n\n    div[data-testid="stMetric"]:hover {\n        animation-play-state: paused;\n        transform: translateY(-7px) scale(1.012) !important;\n        border-color: #5a5a5a !important;\n        box-shadow:\n            0 5px 10px rgba(0,0,0,0.58),\n            0 20px 42px rgba(0,0,0,0.52),\n            0 0 28px rgba(255,255,255,0.035),\n            inset 0 1px 0 rgba(255,255,255,0.12) !important;\n    }\n\n    /* Botones con respuesta más viva */\n    div.stButton > button,\n    div.stFormSubmitButton > button,\n    div.stDownloadButton > button {\n        transition: transform 0.2s cubic-bezier(.2,.8,.2,1),\n                    box-shadow 0.2s ease,\n                    border-color 0.2s ease,\n                    background 0.2s ease !important;\n    }\n\n    div.stButton > button:hover,\n    div.stFormSubmitButton > button:hover,\n    div.stDownloadButton > button:hover {\n        transform: translateY(-3px) scale(1.015) !important;\n        border-color: #777777 !important;\n        box-shadow:\n            0 4px 8px rgba(0,0,0,0.62),\n            0 16px 32px rgba(0,0,0,0.52),\n            0 0 20px rgba(255,255,255,0.035),\n            inset 0 1px 0 rgba(255,255,255,0.14) !important;\n    }\n\n    /* Iconos: pequeño pulso elegante al pasar el mouse */\n    .ui-module-icon,\n    .ui-module-header i,\n    .ui-section-title i {\n        transition: transform 0.25s ease, filter 0.25s ease;\n    }\n\n    .ui-module-header:hover .ui-module-icon,\n    .ui-module-header:hover i {\n        transform: translateY(-2px) scale(1.06);\n        filter: drop-shadow(0 5px 10px rgba(255,255,255,0.12));\n    }\n\n    /* Inputs más vivos sin perder el aspecto de cristal */\n    div[data-baseweb="input"] > div:hover,\n    div[data-baseweb="textarea"] > div:hover,\n    div[data-baseweb="select"] > div:hover {\n        border-color: #4b4b4b !important;\n        box-shadow:\n            inset 0 2px 8px rgba(0,0,0,0.48),\n            0 0 16px rgba(255,255,255,0.025) !important;\n    }\n\n    /* Aparición suave de bloques al cargar */\n    .main .block-container > div {\n        animation: softReveal 0.55s ease both;\n    }\n\n    @keyframes softReveal {\n        from { opacity: 0; transform: translateY(7px); }\n        to { opacity: 1; transform: translateY(0); }\n    }\n\n    /* Respeta usuarios que prefieren menos movimiento */\n    @media (prefers-reduced-motion: reduce) {\n        *, *::before, *::after {\n            animation-duration: 0.01ms !important;\n            animation-iteration-count: 1 !important;\n            transition-duration: 0.01ms !important;\n        }\n    }\n    </style>
+\n\n    /* ========================================================\n       GLASS VIVO / MICROANIMACIONES PREMIUM\n       Solo visual: no altera la lógica de Streamlit.\n       ======================================================== */\n\n    .stApp {\n        background:\n            radial-gradient(circle at 12% 18%, rgba(255,255,255,0.075), transparent 20%),\n            radial-gradient(circle at 86% 12%, rgba(130,130,130,0.065), transparent 22%),\n            radial-gradient(circle at 50% 88%, rgba(255,255,255,0.035), transparent 25%),\n            linear-gradient(135deg, #020202 0%, #090909 48%, #020202 100%) !important;\n        background-size: 140% 140%;\n        animation: glassAmbient 18s ease-in-out infinite alternate;\n    }\n\n    @keyframes glassAmbient {\n        0% { background-position: 0% 0%; }\n        50% { background-position: 100% 35%; }\n        100% { background-position: 35% 100%; }\n    }\n\n    /* Luz ambiental muy suave que recorre el cristal */\n    div[data-testid="stMetric"]::after,\n    div[data-testid="stForm"]::after,\n    div[data-testid="stExpander"]::after,\n    .clase-card::after,\n    .ui-module-header::after {\n        animation: glassShimmer 7s ease-in-out infinite;\n    }\n\n    @keyframes glassShimmer {\n        0%, 100% { opacity: 0.18; transform: translateX(-35%) rotate(24deg); }\n        50% { opacity: 0.52; transform: translateX(115%) rotate(24deg); }\n    }\n\n    /* Tarjetas con una pequeña sensación de objeto flotante */\n    div[data-testid="stMetric"] {\n        animation: cardFloat 6s ease-in-out infinite;\n    }\n\n    div[data-testid="stMetric"]:nth-child(2) { animation-delay: -1.2s; }\n    div[data-testid="stMetric"]:nth-child(3) { animation-delay: -2.4s; }\n    div[data-testid="stMetric"]:nth-child(4) { animation-delay: -3.6s; }\n\n    @keyframes cardFloat {\n        0%, 100% { transform: translateY(0px); }\n        50% { transform: translateY(-3px); }\n    }\n\n    div[data-testid="stMetric"]:hover {\n        animation-play-state: paused;\n        transform: translateY(-7px) scale(1.012) !important;\n        border-color: #5a5a5a !important;\n        box-shadow:\n            0 5px 10px rgba(0,0,0,0.58),\n            0 20px 42px rgba(0,0,0,0.52),\n            0 0 28px rgba(255,255,255,0.035),\n            inset 0 1px 0 rgba(255,255,255,0.12) !important;\n    }\n\n    /* Botones con respuesta más viva */\n    div.stButton > button,\n    div.stFormSubmitButton > button,\n    div.stDownloadButton > button {\n        transition: transform 0.2s cubic-bezier(.2,.8,.2,1),\n                    box-shadow 0.2s ease,\n                    border-color 0.2s ease,\n                    background 0.2s ease !important;\n    }\n\n    div.stButton > button:hover,\n    div.stFormSubmitButton > button:hover,\n    div.stDownloadButton > button:hover {\n        transform: translateY(-3px) scale(1.015) !important;\n        border-color: #777777 !important;\n        box-shadow:\n            0 4px 8px rgba(0,0,0,0.62),\n            0 16px 32px rgba(0,0,0,0.52),\n            0 0 20px rgba(255,255,255,0.035),\n            inset 0 1px 0 rgba(255,255,255,0.14) !important;\n    }\n\n    /* Iconos: pequeño pulso elegante al pasar el mouse */\n    .ui-module-icon,\n    .ui-module-header i,\n    .ui-section-title i {\n        transition: transform 0.25s ease, filter 0.25s ease;\n    }\n\n    .ui-module-header:hover .ui-module-icon,\n    .ui-module-header:hover i {\n        transform: translateY(-2px) scale(1.06);\n        filter: drop-shadow(0 5px 10px rgba(255,255,255,0.12));\n    }\n\n    /* Inputs más vivos sin perder el aspecto de cristal */\n    div[data-baseweb="input"] > div:hover,\n    div[data-baseweb="textarea"] > div:hover,\n    div[data-baseweb="select"] > div:hover {\n        border-color: #4b4b4b !important;\n        box-shadow:\n            inset 0 2px 8px rgba(0,0,0,0.48),\n            0 0 16px rgba(255,255,255,0.025) !important;\n    }\n\n    /* Aparición suave de bloques al cargar */\n    .main .block-container > div {\n        animation: softReveal 0.55s ease both;\n    }\n\n    @keyframes softReveal {\n        from { opacity: 0; transform: translateY(7px); }\n        to { opacity: 1; transform: translateY(0); }\n    }\n\n    /* Respeta usuarios que prefieren menos movimiento */\n    @media (prefers-reduced-motion: reduce) {\n        *, *::before, *::after {\n            animation-duration: 0.01ms !important;\n            animation-iteration-count: 1 !important;\n            transition-duration: 0.01ms !important;\n        }\n    }\n    
+
+    /* ==========================================================
+       DASHBOARD WOW - GLASS INTERACTIVO
+       ========================================================== */
+    .dashboard-hero {
+        position: relative;
+        overflow: hidden;
+        margin: 8px 0 24px 0;
+        padding: 30px 34px;
+        border-radius: 26px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background:
+            radial-gradient(circle at 85% 20%, rgba(255,255,255,0.12), transparent 22%),
+            linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.018));
+        backdrop-filter: blur(22px) saturate(125%);
+        -webkit-backdrop-filter: blur(22px) saturate(125%);
+        box-shadow: 0 24px 55px rgba(0,0,0,0.52), inset 0 1px 0 rgba(255,255,255,0.13);
+        transform-style: preserve-3d;
+        animation: heroFloat 7s ease-in-out infinite;
+    }
+    .dashboard-hero::before {
+        content: "";
+        position: absolute;
+        width: 280px;
+        height: 280px;
+        right: -90px;
+        top: -150px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.08);
+        filter: blur(45px);
+        animation: orbMove 9s ease-in-out infinite alternate;
+    }
+    .dashboard-kicker { color:#aaa; font-size:11px; letter-spacing:3px; font-weight:800; position:relative; z-index:1; }
+    .dashboard-title { color:#fff; font-size:34px; font-weight:900; margin-top:5px; position:relative; z-index:1; text-shadow:0 5px 25px rgba(255,255,255,0.12); }
+    .dashboard-subtitle { color:#9b9b9b; margin-top:6px; font-size:14px; position:relative; z-index:1; }
+    .dashboard-section-title { margin:26px 0 12px; color:#fff; font-size:18px; font-weight:800; letter-spacing:.3px; }
+    .glass-panel-title { color:#d7d7d7; font-weight:700; margin:4px 0 8px; }
+    .dashboard-card {
+        position:relative; overflow:hidden; min-height:145px; padding:20px; border-radius:22px;
+        border:1px solid rgba(255,255,255,0.11);
+        background:linear-gradient(145deg, rgba(35,35,35,.72), rgba(7,7,7,.74));
+        backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+        box-shadow:0 18px 38px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.08);
+        transition:transform .28s ease, border-color .28s ease, box-shadow .28s ease;
+    }
+    .dashboard-card::after {
+        content:""; position:absolute; inset:-60% -30%;
+        background:linear-gradient(110deg, transparent 40%, rgba(255,255,255,.08) 50%, transparent 60%);
+        transform:translateX(-65%) rotate(8deg); transition:transform .7s ease; pointer-events:none;
+    }
+    .dashboard-card:hover { transform:translateY(-8px) perspective(800px) rotateX(2deg) rotateY(-2deg); border-color:rgba(255,255,255,.24); box-shadow:0 28px 55px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.12); }
+    .dashboard-card:hover::after { transform:translateX(65%) rotate(8deg); }
+    .dash-icon { font-size:25px; margin-bottom:12px; filter:drop-shadow(0 5px 10px rgba(255,255,255,.12)); }
+    .dash-label { color:#9c9c9c; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+    .dash-value { color:#fff; font-size:30px; font-weight:900; margin-top:4px; }
+    .dash-note { color:#777; font-size:11px; margin-top:5px; }
+    @keyframes heroFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+    @keyframes orbMove { from{transform:translate(-15px,8px) scale(.9)} to{transform:translate(18px,28px) scale(1.15)} }
+    @media (prefers-reduced-motion: reduce) { .dashboard-hero,.dashboard-hero::before { animation:none !important; } .dashboard-card { transition:none !important; } }
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -1769,6 +1830,107 @@ def mostrar_resumen_clases(
 # ESTADO DE SESIÓN
 # ============================================================
 
+# ============================================================
+# DASHBOARD ADMINISTRADOR - CAPA VISUAL
+# ============================================================
+def mostrar_dashboard_admin(df_usuarios, df_historial, df_pagos, df_clases):
+    clientes = df_usuarios.copy() if not df_usuarios.empty else pd.DataFrame()
+    if not clientes.empty and "rol" in clientes.columns:
+        clientes = clientes[clientes["rol"].astype(str).str.lower() == "cliente"].copy()
+
+    total_clientes = len(clientes)
+    total_clases = len(df_clases) if not df_clases.empty else 0
+    clases_tomadas = 0
+    if not df_clases.empty and "estado" in df_clases.columns:
+        clases_tomadas = int((df_clases["estado"].astype(str).str.lower() == "tomada").sum())
+
+    total_ingresos = 0.0
+    if not df_pagos.empty and "valor" in df_pagos.columns:
+        total_ingresos = pd.to_numeric(df_pagos["valor"], errors="coerce").fillna(0).sum()
+
+    ultima_evaluacion = "Sin registros"
+    if not df_historial.empty and "fecha_evaluacion" in df_historial.columns:
+        fechas = pd.to_datetime(df_historial["fecha_evaluacion"], errors="coerce")
+        if fechas.notna().any():
+            ultima_evaluacion = fechas.max().strftime("%d-%m-%Y")
+
+    st.markdown(
+        '<div class="dashboard-hero">'
+        '<div class="dashboard-glow"></div>'
+        '<div class="dashboard-kicker">PERSONAL TRAINING · CONTROL CENTER</div>'
+        '<div class="dashboard-title">Dashboard General</div>'
+        '<div class="dashboard-subtitle">Visión rápida de clientes, clases, ingresos y evolución.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Clientes", f"{total_clientes:,}")
+    c2.metric("Clases tomadas", f"{clases_tomadas:,}")
+    c3.metric("Ingresos registrados", f"${total_ingresos:,.0f}")
+    c4.metric("Última evaluación", ultima_evaluacion)
+
+    st.markdown('<div class="dashboard-section-title">Actividad de la plataforma</div>', unsafe_allow_html=True)
+    left, right = st.columns([1.15, 0.85])
+
+    with left:
+        if not df_clases.empty and "fecha_clase" in df_clases.columns:
+            actividad = df_clases.copy()
+            actividad["fecha"] = pd.to_datetime(actividad["fecha_clase"], errors="coerce")
+            actividad = actividad.dropna(subset=["fecha"])
+            if not actividad.empty:
+                actividad = actividad.groupby(actividad["fecha"].dt.strftime("%d-%m"), sort=False).size().tail(14)
+                st.markdown('<div class="glass-panel-title">Clases por día</div>', unsafe_allow_html=True)
+                st.line_chart(actividad, use_container_width=True)
+            else:
+                st.info("Aún no hay fechas de clases para mostrar.")
+        else:
+            st.info("Aún no hay clases registradas.")
+
+    with right:
+        if not df_pagos.empty and "valor" in df_pagos.columns:
+            pagos = df_pagos.copy()
+            pagos["valor_num"] = pd.to_numeric(pagos["valor"], errors="coerce").fillna(0)
+            if "fecha_pago" in pagos.columns:
+                pagos["fecha"] = pd.to_datetime(pagos["fecha_pago"], errors="coerce")
+                pagos = pagos.dropna(subset=["fecha"])
+                if not pagos.empty:
+                    resumen = pagos.groupby(pagos["fecha"].dt.strftime("%b")).agg(Ingresos=("valor_num", "sum"))
+                    st.markdown('<div class="glass-panel-title">Ingresos registrados</div>', unsafe_allow_html=True)
+                    st.bar_chart(resumen, use_container_width=True)
+                else:
+                    st.metric("Total histórico", f"${total_ingresos:,.0f}")
+            else:
+                st.metric("Total histórico", f"${total_ingresos:,.0f}")
+        else:
+            st.info("Aún no hay pagos registrados.")
+
+    st.markdown('<div class="dashboard-section-title">Resumen operativo</div>', unsafe_allow_html=True)
+    r1, r2, r3 = st.columns(3)
+
+    with r1:
+        st.markdown(
+            f'<div class="dashboard-card"><div class="dash-icon">👥</div>'
+            f'<div class="dash-label">Clientes registrados</div><div class="dash-value">{total_clientes}</div>'
+            f'<div class="dash-note">Usuarios con rol Cliente</div></div>',
+            unsafe_allow_html=True,
+        )
+    with r2:
+        st.markdown(
+            f'<div class="dashboard-card"><div class="dash-icon">🏋️</div>'
+            f'<div class="dash-label">Clases registradas</div><div class="dash-value">{total_clases}</div>'
+            f'<div class="dash-note">Incluye historial de clases</div></div>',
+            unsafe_allow_html=True,
+        )
+    with r3:
+        st.markdown(
+            f'<div class="dashboard-card"><div class="dash-icon">💳</div>'
+            f'<div class="dash-label">Movimientos de pago</div><div class="dash-value">{len(df_pagos) if not df_pagos.empty else 0}</div>'
+            f'<div class="dash-note">Ingresos registrados en sistema</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["rol"] = None
@@ -1910,6 +2072,7 @@ if not st.session_state["autenticado"]:
 
                     except Exception as e:
                         st.error(f"❌ Error al guardar usuario: {e}")
+
 
 # ============================================================
 # APLICACIÓN AUTENTICADA
@@ -2220,13 +2383,18 @@ else:
                 opcion_admin = st.sidebar.radio(
                     "",
                     [
+                        "Dashboard General",
                         "Gestión de Clientes",
                         "Control de Clases",
                     ],
                 )
 
+                # DASHBOARD GENERAL
+                if opcion_admin == "Dashboard General":
+                    mostrar_dashboard_admin(df_usuarios, df_historial, df_pagos, df_clases)
+
                 # GESTIÓN DE CLIENTES
-                if opcion_admin == "Gestión de Clientes":
+                elif opcion_admin == "Gestión de Clientes":
                     cedula_sel = st.selectbox(
                         "Buscar Cliente por Nombre/Cédula:",
                         clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"].astype(str),
