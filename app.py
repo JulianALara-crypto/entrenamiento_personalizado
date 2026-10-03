@@ -163,6 +163,165 @@ st.markdown(
     """
     <style>
 
+    /* ---------- GLASSMORPHISM PREMIUM 2.0 ---------- */
+    .main .block-container {
+        position: relative;
+    }
+
+    /* Cristal profundo para formularios y paneles */
+    div[data-testid="stForm"],
+    div[data-testid="stExpander"],
+    div[data-testid="stMetric"],
+    div[data-testid="stDataFrame"] {
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(18px) saturate(120%);
+        -webkit-backdrop-filter: blur(18px) saturate(120%);
+    }
+
+    div[data-testid="stForm"]::before,
+    div[data-testid="stExpander"]::before,
+    div[data-testid="stMetric"]::before,
+    .clase-card::before,
+    .ui-module-header::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.32), transparent);
+        opacity: 0.72;
+        pointer-events: none;
+    }
+
+    /* Reflejo diagonal muy sutil, como vidrio real */
+    div[data-testid="stMetric"]::after,
+    div[data-testid="stForm"]::after,
+    .clase-card::after {
+        content: "";
+        position: absolute;
+        width: 55%;
+        height: 180%;
+        top: -55%;
+        left: -28%;
+        transform: rotate(24deg);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.035), transparent);
+        pointer-events: none;
+    }
+
+    /* Sombras multicapa para profundidad */
+    div[data-testid="stMetric"] {
+        box-shadow:
+            0 2px 4px rgba(0,0,0,0.50),
+            0 10px 24px rgba(0,0,0,0.38),
+            0 24px 48px rgba(0,0,0,0.24),
+            inset 0 1px 0 rgba(255,255,255,0.075),
+            inset 0 -1px 0 rgba(0,0,0,0.65);
+    }
+
+    div[data-testid="stForm"] {
+        box-shadow:
+            0 3px 7px rgba(0,0,0,0.48),
+            0 16px 34px rgba(0,0,0,0.40),
+            0 30px 65px rgba(0,0,0,0.22),
+            inset 0 1px 0 rgba(255,255,255,0.065),
+            inset 0 -1px 0 rgba(0,0,0,0.70);
+    }
+
+    /* Inputs con sensación de cristal hundido */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="select"] > div {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow:
+            inset 0 2px 8px rgba(0,0,0,0.48),
+            inset 0 1px 0 rgba(255,255,255,0.035),
+            0 2px 8px rgba(0,0,0,0.22) !important;
+    }
+
+    /* Botones con volumen y sombra de objeto */
+    div.stButton > button,
+    div.stFormSubmitButton > button,
+    div.stDownloadButton > button {
+        position: relative;
+        overflow: hidden;
+        box-shadow:
+            0 2px 4px rgba(0,0,0,0.55),
+            0 8px 18px rgba(0,0,0,0.42),
+            inset 0 1px 0 rgba(255,255,255,0.09),
+            inset 0 -2px 0 rgba(0,0,0,0.45) !important;
+    }
+
+    div.stButton > button::before,
+    div.stFormSubmitButton > button::before,
+    div.stDownloadButton > button::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 10%;
+        right: 10%;
+        height: 1px;
+        background: rgba(255,255,255,0.22);
+        pointer-events: none;
+    }
+
+    div.stButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    div.stDownloadButton > button:hover {
+        box-shadow:
+            0 3px 5px rgba(0,0,0,0.60),
+            0 14px 30px rgba(0,0,0,0.50),
+            inset 0 1px 0 rgba(255,255,255,0.13),
+            inset 0 -2px 0 rgba(0,0,0,0.38) !important;
+    }
+
+    /* Sidebar tipo panel de vidrio oscuro */
+    section[data-testid="stSidebar"] {
+        backdrop-filter: blur(20px) saturate(120%);
+        -webkit-backdrop-filter: blur(20px) saturate(120%);
+        box-shadow: 10px 0 35px rgba(0,0,0,0.30);
+    }
+
+    /* Encabezados de módulos con cristal */
+    .ui-module-header {
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(16px) saturate(120%);
+        -webkit-backdrop-filter: blur(16px) saturate(120%);
+        box-shadow:
+            0 4px 8px rgba(0,0,0,0.42),
+            0 16px 32px rgba(0,0,0,0.28),
+            inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+
+    .ui-module-icon {
+        box-shadow:
+            0 5px 14px rgba(0,0,0,0.42),
+            inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+
+    /* Tarjetas de clases más profundas */
+    .clase-card {
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(14px) saturate(115%);
+        -webkit-backdrop-filter: blur(14px) saturate(115%);
+        box-shadow:
+            0 3px 6px rgba(0,0,0,0.52),
+            0 14px 30px rgba(0,0,0,0.38),
+            inset 0 1px 0 rgba(255,255,255,0.06),
+            inset 0 -1px 0 rgba(0,0,0,0.62) !important;
+    }
+
+    .clase-card:hover {
+        box-shadow:
+            0 5px 9px rgba(0,0,0,0.55),
+            0 20px 38px rgba(0,0,0,0.45),
+            inset 0 1px 0 rgba(255,255,255,0.08) !important;
+    }
+
     /* ---------- Fondo y profundidad general ---------- */
     .stApp {
         background:
