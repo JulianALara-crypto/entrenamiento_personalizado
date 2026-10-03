@@ -1775,7 +1775,7 @@ else:
                     "MENÚ ADMINISTRADOR",
                     [
                         "👤 Gestión de Clientes",
-                        "🏋️ Control de Clases",
+                        "️ Control de Clases",
                     ],
                 )
 
@@ -2045,8 +2045,8 @@ else:
                                 st.info("No hay registros en el historial general.")
 
                 # CONTROL DE CLASES
-                elif opcion_admin == "🏋️ Control de Clases":
-                    st.subheader("🏋️ Control de Clases Personalizadas")
+                elif opcion_admin == "️ Control de Clases":
+                    st.subheader("️ Control de Clases Personalizadas")
                     st.info("Aquí el ADMIN configura el plan y registra manualmente cada clase realmente tomada.")
 
                     cliente_clase_sel = st.selectbox(
