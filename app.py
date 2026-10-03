@@ -666,10 +666,10 @@ def mostrar_graficos_evolucion(df_filtrado):
     st.markdown("### 📈 Gráficas de Evolución Temporal")
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "⚖️ Peso y Composición",
-        "📏 Perímetros Principales",
-        "💪 Extremidades Superiores",
-        "🦵 Piernas y Glúteos",
+        " Peso y Composición",
+        " Perímetros Principales",
+        " Extremidades Superiores",
+        " Piernas y Glúteos",
     ])
 
     with tab1:
@@ -1291,7 +1291,7 @@ def obtener_resumen_clases(df_clases, cedula):
 def mostrar_resumen_clases(
     df_clases,
     cedula,
-    titulo="🏋️ Clases Personalizadas"
+    titulo=" Clases Personalizadas"
 ):
     resumen = obtener_resumen_clases(df_clases, cedula)
 
@@ -1497,14 +1497,14 @@ else:
         opcion = st.sidebar.radio(
             "MENÚ",
             [
-                "📏 Registrar Medidas Hoy",
-                "📊 Ver Mi Progreso",
-                "🏋️ Mis Clases",
+                " Registrar Medidas Hoy",
+                " Ver Mi Progreso",
+                " Mis Clases",
             ],
         )
 
         # REGISTRAR MEDIDAS
-        if opcion == "📏 Registrar Medidas Hoy":
+        if opcion == " Registrar Medidas Hoy":
             st.subheader("Registro de Evaluación Antropométrica")
 
             with st.form("form_medidas_cliente"):
@@ -1521,12 +1521,12 @@ else:
                 )
 
                 st.markdown("---")
-                st.write("### 📏 Medidas Corporales (cm) — Ordenado de Cabeza a Pies")
+                st.write("###  Medidas Corporales (cm) — Ordenado de Cabeza a Pies")
 
                 col_izq, col_der = st.columns(2)
 
                 with col_izq:
-                    st.markdown("💥 Tren Superior y Torso")
+                    st.markdown(" Tren Superior y Torso")
                     cuello = st.number_input("1. Cuello:", 20.0, 60.0, 38.0)
                     hombros = st.number_input("2. Hombros:", 50.0, 180.0, 110.0)
                     pecho = st.number_input("3. Pecho:", 50.0, 180.0, 95.0)
@@ -1534,7 +1534,7 @@ else:
                     cadera = st.number_input("5. Glúteos / Cadera:", 40.0, 180.0, 95.0)
 
                 with col_der:
-                    st.markdown("💪 Extremidades (Brazos y Piernas)")
+                    st.markdown(" Extremidades (Brazos y Piernas)")
                     bicep_der = st.number_input("6. Bícep Derecho:", 15.0, 60.0, 32.0)
                     bicep_izq = st.number_input("7. Bícep Izquierdo:", 15.0, 60.0, 32.0)
                     pierna_der = st.number_input("8. Pierna Derecha:", 20.0, 90.0, 55.0)
@@ -1645,8 +1645,8 @@ else:
                         st.error(f"❌ Error calculando o guardando las medidas: {e}")
 
         # VER PROGRESO
-        elif opcion == "📊 Ver Mi Progreso":
-            st.subheader("📉 Comparativa de Evolución")
+        elif opcion == " Ver Mi Progreso":
+            st.subheader(" Comparativa de Evolución")
 
             user_id = str(st.session_state["cedula"]).strip()
             mis_registros = (
@@ -1688,7 +1688,7 @@ else:
                     diff_cintura = cint_a - cint_i
                     diff_grasa = gras_a - gras_i
 
-                    st.info("📊 Resumen desde tu primer registro hasta hoy:")
+                    st.info(" Resumen desde tu primer registro hasta hoy:")
 
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Variación de Peso", f"{peso_a} kg", f"{diff_peso:.1f} kg")
@@ -1720,14 +1720,14 @@ else:
                     except Exception as e:
                         st.error(f"❌ No fue posible generar el informe PDF: {e}")
 
-                st.markdown("#### 📋 Historial de Registros Completos")
+                st.markdown("####  Historial de Registros Completos")
                 st.dataframe(mis_registros.astype(str), use_container_width=True)
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
         # MIS CLASES
-        elif opcion == "🏋️ Mis Clases":
-            st.subheader("🏋️ Mi Plan de Clases Personalizadas")
+        elif opcion == " Mis Clases":
+            st.subheader(" Mi Plan de Clases Personalizadas")
             mostrar_resumen_clases(df_clases, st.session_state["cedula"])
 
             resumen_clases = obtener_resumen_clases(df_clases, st.session_state["cedula"])
@@ -1808,7 +1808,7 @@ else:
 
                             # RESUMEN DE CLASES EN PERFIL
                             st.markdown("---")
-                            mostrar_resumen_clases(df_clases, id_cliente, "🏋️ Resumen de Clases")
+                            mostrar_resumen_clases(df_clases, id_cliente, " Resumen de Clases")
 
                             # PAGOS Y MENSUALIDAD
                             st.markdown("---")
@@ -2182,7 +2182,7 @@ else:
                         )
 
                         registrar_clase = st.form_submit_button(
-                            "🏋️ Registrar Clase Tomada",
+                            " Registrar Clase Tomada",
                             use_container_width=True,
                         )
 
