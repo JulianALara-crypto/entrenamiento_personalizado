@@ -89,10 +89,86 @@ st.markdown(
         margin-bottom: 15px;
     }
 
+    .ui-section-title {
+        color: #ffffff !important;
+        text-align: center !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.3px;
+        margin-top: 0.7rem;
+        margin-bottom: 1rem;
+    }
+
+    .ui-section-title .fi { color: #ffffff; }
+
+    .ui-module-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 12px 18px;
+        margin: 10px 0 18px 0;
+        border: 1px solid #252525;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #111111 0%, #080808 100%);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+    }
+
+    .ui-module-icon {
+        width: 58px;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 15px;
+        border: 1px solid #333333;
+        background: #151515;
+    }
+
+    .ui-module-icon .fi { color: #ffffff; margin-right: 0 !important; }
+
+    .ui-module-title {
+        color: #ffffff;
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .ui-attribution {
+        text-align: center;
+        color: #777777;
+        font-size: 0.75rem;
+        margin-top: 30px;
+        padding: 12px 0;
+        border-top: 1px solid #222222;
+    }
+
+    .ui-attribution a { color: #aaaaaa !important; text-decoration: none; }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# UIcons de Flaticon: familia consistente para la interfaz.
+st.markdown(
+    "<link rel=\"stylesheet\" href=\"https://cdn-uicons.flaticon.com/2.6.0/uicons-regular-rounded/css/uicons-regular-rounded.css\">",
+    unsafe_allow_html=True,
+)
+
+
+def icono_ui(clase, tamano=28):
+    return (
+        f'<i class=\"fi {clase}\" style=\"font-size:{tamano}px; '
+        'vertical-align:middle; margin-right:10px;\"></i>'
+    )
+
+
+def titulo_ui(texto, clase_icono="fi-rr-apps", nivel=2, tamano=30):
+    tag = f"h{nivel}"
+    st.markdown(
+        f'<{tag} class=\"ui-section-title\">{icono_ui(clase_icono, tamano)}{texto}</{tag}>',
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -663,13 +739,13 @@ def mostrar_graficos_evolucion(df_filtrado):
 
     df_graficos["Fecha"] = df_graficos["fecha_dt"].dt.strftime("%d-%m-%Y")
 
-    st.markdown("### 📈 Gráficas de Evolución Temporal")
+    titulo_ui("Gráficas de Evolución Temporal", "fi-rr-chart-line-up", 3, 24)
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        " Peso y Composición",
-        " Perímetros Principales",
-        " Extremidades Superiores",
-        " Piernas y Glúteos",
+        "Peso y Composición",
+        "Perímetros Principales",
+        "Extremidades Superiores",
+        "Piernas y Glúteos",
     ])
 
     with tab1:
@@ -1291,11 +1367,11 @@ def obtener_resumen_clases(df_clases, cedula):
 def mostrar_resumen_clases(
     df_clases,
     cedula,
-    titulo=" Clases Personalizadas"
+    titulo="Clases Personalizadas"
 ):
     resumen = obtener_resumen_clases(df_clases, cedula)
 
-    st.markdown(f"### {titulo}")
+    titulo_ui(titulo, "fi-rr-dumbbell", 3, 24)
 
     if resumen["clases_contratadas"] <= 0:
         st.info("Este cliente todavía no tiene un plan de clases configurado.")
@@ -1354,7 +1430,7 @@ if not st.session_state["autenticado"]:
 
     # LOGIN
     with col1:
-        st.subheader("🔐 Iniciar Sesión")
+        titulo_ui("Iniciar Sesión", "fi-rr-lock", 2, 28)
 
         cedula_ingreso = st.text_input(
             "Número de Cédula / ID:"
@@ -1381,7 +1457,7 @@ if not st.session_state["autenticado"]:
                 if error_usuarios:
                     st.error(f"⚠️ {error_usuarios}")
                 elif df_usuarios.empty or "cedula" not in df_usuarios.columns:
-                    st.error("🚨 No fue posible verificar los usuarios en este momento. Intenta nuevamente.")
+                    st.error("❌ No fue posible verificar los usuarios en este momento. Intenta nuevamente.")
                 elif normalizar_cedula(cedula_ingreso) in df_usuarios["cedula"].values:
                     u = df_usuarios[df_usuarios["cedula"] == normalizar_cedula(cedula_ingreso)].iloc[0]
 
@@ -1392,13 +1468,13 @@ if not st.session_state["autenticado"]:
                         st.session_state["nombre"] = u["nombre_completo"]
                         st.rerun()
                     else:
-                        st.error("🚨 Contraseña incorrecta.")
+                        st.error("❌ Contraseña incorrecta.")
                 else:
-                    st.error("🚨 Cédula no registrada.")
+                    st.error("❌ Cédula no registrada.")
 
     # REGISTRO
     with col2:
-        st.subheader("📝 Crear Cuenta Nueva")
+        titulo_ui("Crear Cuenta Nueva", "fi-rr-user-add", 2, 28)
 
         with st.form("form_registro"):
             reg_cedula = st.text_input("Número de Cédula / ID:").strip()
@@ -1422,7 +1498,7 @@ if not st.session_state["autenticado"]:
                 elif not reg_cedula or not reg_nombre or not reg_pass:
                     st.error("⚠️ Cédula, Nombre y Contraseña son obligatorios.")
                 elif not df_usuarios.empty and normalizar_cedula(reg_cedula) in df_usuarios["cedula"].values:
-                    st.error("🚨 Esta cédula ya está registrada.")
+                    st.error("❌ Esta cédula ya está registrada.")
                 else:
                     datos_usuario = {
                         "action": "registrar_usuario",
@@ -1455,7 +1531,7 @@ if not st.session_state["autenticado"]:
 
                         if str(resultado_registro.get("status", "")).lower() == "error":
                             st.error(
-                                "🚨 Google Apps Script reportó un error: "
+                                "❌ Google Apps Script reportó un error: "
                                 + str(
                                     resultado_registro.get(
                                         "message",
@@ -1471,14 +1547,14 @@ if not st.session_state["autenticado"]:
                             )
 
                     except Exception as e:
-                        st.error(f"🚨 Error al guardar usuario: {e}")
+                        st.error(f"❌ Error al guardar usuario: {e}")
 
 # ============================================================
 # APLICACIÓN AUTENTICADA
 # ============================================================
 
 else:
-    st.sidebar.markdown(f"### 🛡️ {st.session_state['nombre']}")
+    st.sidebar.markdown(f"### {icono_ui('fi-rr-user', 22)}{st.session_state['nombre']}", unsafe_allow_html=True)
     st.sidebar.markdown(f"Rol: {st.session_state['rol']}")
 
     if st.sidebar.button("Cerrar Sesión"):
@@ -1494,17 +1570,21 @@ else:
     # CLIENTE
     # ========================================================
     if st.session_state["rol"] == "Cliente":
+        st.sidebar.markdown(
+            f"{icono_ui('fi-rr-apps', 20)}<b>MENÚ CLIENTE</b>",
+            unsafe_allow_html=True,
+        )
         opcion = st.sidebar.radio(
-            "MENÚ",
+            "",
             [
-                " Registrar Medidas Hoy",
-                " Ver Mi Progreso",
-                " Mis Clases",
+                "Registrar Medidas Hoy",
+                "Ver Mi Progreso",
+                "Mis Clases",
             ],
         )
 
         # REGISTRAR MEDIDAS
-        if opcion == " Registrar Medidas Hoy":
+        if opcion == "Registrar Medidas Hoy":
             st.subheader("Registro de Evaluación Antropométrica")
 
             with st.form("form_medidas_cliente"):
@@ -1521,12 +1601,12 @@ else:
                 )
 
                 st.markdown("---")
-                st.write("###  Medidas Corporales (cm) — Ordenado de Cabeza a Pies")
+                titulo_ui("Medidas Corporales (cm) — Ordenado de Cabeza a Pies", "fi-rr-ruler-horizontal", 3, 24)
 
                 col_izq, col_der = st.columns(2)
 
                 with col_izq:
-                    st.markdown(" Tren Superior y Torso")
+                    titulo_ui("Tren Superior y Torso", "fi-rr-body", 4, 21)
                     cuello = st.number_input("1. Cuello:", 20.0, 60.0, 38.0)
                     hombros = st.number_input("2. Hombros:", 50.0, 180.0, 110.0)
                     pecho = st.number_input("3. Pecho:", 50.0, 180.0, 95.0)
@@ -1534,7 +1614,7 @@ else:
                     cadera = st.number_input("5. Glúteos / Cadera:", 40.0, 180.0, 95.0)
 
                 with col_der:
-                    st.markdown(" Extremidades (Brazos y Piernas)")
+                    titulo_ui("Extremidades (Brazos y Piernas)", "fi-rr-dumbbell", 4, 21)
                     bicep_der = st.number_input("6. Bícep Derecho:", 15.0, 60.0, 32.0)
                     bicep_izq = st.number_input("7. Bícep Izquierdo:", 15.0, 60.0, 32.0)
                     pierna_der = st.number_input("8. Pierna Derecha:", 20.0, 90.0, 55.0)
@@ -1627,7 +1707,7 @@ else:
 
                         if resultado_api.get("status") == "error":
                             st.error(
-                                "🚨 Google Apps Script reportó un error: "
+                                "❌ Google Apps Script reportó un error: "
                                 + str(resultado_api.get("message", "Error desconocido"))
                             )
                             st.stop()
@@ -1642,11 +1722,11 @@ else:
                         r4.metric("Edad Metabólica", f"{edad_bio} años")
 
                     except Exception as e:
-                        st.error(f"🚨 Error calculando o guardando las medidas: {e}")
+                        st.error(f"❌ Error calculando o guardando las medidas: {e}")
 
         # VER PROGRESO
-        elif opcion == " Ver Mi Progreso":
-            st.subheader(" Comparativa de Evolución")
+        elif opcion == "Ver Mi Progreso":
+            titulo_ui("Comparativa de Evolución", "fi-rr-chart-line-up", 2, 28)
 
             user_id = str(st.session_state["cedula"]).strip()
             mis_registros = (
@@ -1688,7 +1768,7 @@ else:
                     diff_cintura = cint_a - cint_i
                     diff_grasa = gras_a - gras_i
 
-                    st.info(" Resumen desde tu primer registro hasta hoy:")
+                    st.info("📊 Resumen desde tu primer registro hasta hoy:")
 
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Variación de Peso", f"{peso_a} kg", f"{diff_peso:.1f} kg")
@@ -1698,9 +1778,9 @@ else:
                 mostrar_graficos_evolucion(mis_registros)
 
                 st.markdown("---")
-                st.markdown("### 📄 Informe de Evolución")
+                titulo_ui("Informe de Evolución", "fi-rr-file-user", 3, 24)
                 st.caption("Genera un informe PDF con logo, resumen, comparativa completa y todo el historial antropométrico.")
-                if st.button("📄 Generar Informe de Evolución en PDF", use_container_width=True, key="btn_pdf_cliente"):
+                if st.button("Generar Informe de Evolución en PDF", use_container_width=True, key="btn_pdf_cliente"):
                     try:
                         pdf_bytes = generar_informe_evolucion_pdf(
                             mis_registros,
@@ -1718,23 +1798,23 @@ else:
                             key="download_pdf_cliente",
                         )
                     except Exception as e:
-                        st.error(f"🚨 No fue posible generar el informe PDF: {e}")
+                        st.error(f"❌ No fue posible generar el informe PDF: {e}")
 
-                st.markdown("####  Historial de Registros Completos")
+                titulo_ui("Historial de Registros Completos", "fi-rr-clipboard", 4, 21)
                 st.dataframe(mis_registros.astype(str), use_container_width=True)
             else:
                 st.info("Aún no has registrado ninguna evaluación física.")
 
         # MIS CLASES
-        elif opcion == " Mis Clases":
-            st.subheader(" Mi Plan de Clases Personalizadas")
+        elif opcion == "Mis Clases":
+            titulo_ui("Mi Plan de Clases Personalizadas", "fi-rr-dumbbell", 2, 28)
             mostrar_resumen_clases(df_clases, st.session_state["cedula"])
 
             resumen_clases = obtener_resumen_clases(df_clases, st.session_state["cedula"])
             registros_clases = resumen_clases["registros"]
 
             if not registros_clases.empty:
-                st.markdown("#### 📅 Clases tomadas")
+                titulo_ui("Clases tomadas", "fi-rr-calendar", 4, 21)
                 tabla = registros_clases.copy()
 
                 columnas_tabla = [
@@ -1771,16 +1851,20 @@ else:
             st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
 
             if not clientes.empty:
+                st.sidebar.markdown(
+                    f"{icono_ui('fi-rr-dashboard', 20)}<b>MENÚ ADMINISTRADOR</b>",
+                    unsafe_allow_html=True,
+                )
                 opcion_admin = st.sidebar.radio(
-                    "MENÚ ADMINISTRADOR",
+                    "",
                     [
-                        "🛡️ Gestión de Clientes",
-                        "️ Control de Clases",
+                        "Gestión de Clientes",
+                        "Control de Clases",
                     ],
                 )
 
                 # GESTIÓN DE CLIENTES
-                if opcion_admin == "🛡️ Gestión de Clientes":
+                if opcion_admin == "Gestión de Clientes":
                     cedula_sel = st.selectbox(
                         "Buscar Cliente por Nombre/Cédula:",
                         clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"].astype(str),
@@ -1794,7 +1878,7 @@ else:
                             u_info = cliente_encontrado.iloc[0]
 
                             st.markdown("---")
-                            st.markdown(f"### 📋 Información de: {u_info['nombre_completo']}")
+                            titulo_ui(f"Información de: {u_info['nombre_completo']}", "fi-rr-file-user", 3, 24)
 
                             info_col1, info_col2, info_col3 = st.columns(3)
                             info_col1.markdown(f"WhatsApp: {u_info.get('whatsapp', 'No registra')}")
@@ -1804,15 +1888,15 @@ else:
                             st.markdown(f"Condiciones Médicas / Lesiones: {u_info.get('condiciones_medicas', 'Ninguna')}")
 
                             ws_url = link_whatsapp(u_info.get("whatsapp", ""), u_info["nombre_completo"])
-                            st.markdown(f"[💬 Enviar Mensaje de Seguimiento por WhatsApp]({ws_url})")
+                            st.markdown(f"[Enviar Mensaje de Seguimiento por WhatsApp]({ws_url})")
 
                             # RESUMEN DE CLASES EN PERFIL
                             st.markdown("---")
-                            mostrar_resumen_clases(df_clases, id_cliente, " Resumen de Clases")
+                            mostrar_resumen_clases(df_clases, id_cliente, "Resumen de Clases")
 
                             # PAGOS Y MENSUALIDAD
                             st.markdown("---")
-                            st.markdown("#### 💳 Pagos y Mensualidad")
+                            titulo_ui("Pagos y Mensualidad", "fi-rr-credit-card", 4, 21)
 
                             pagos_cliente = pd.DataFrame()
                             if not df_pagos.empty and "cedula" in df_pagos.columns:
@@ -1903,7 +1987,7 @@ else:
                                         value="Abono mensualidad"
                                     ).strip()
 
-                                    guardar_pago = st.form_submit_button("💾 Registrar Pago", use_container_width=True)
+                                    guardar_pago = st.form_submit_button("Registrar Pago", use_container_width=True)
 
                                     if guardar_pago:
                                         try:
@@ -1911,10 +1995,10 @@ else:
                                             valor_pago = float(valor_pago)
 
                                             if valor_mensualidad <= 0:
-                                                st.error("🚨 La mensualidad debe ser mayor que cero.")
+                                                st.error("❌ La mensualidad debe ser mayor que cero.")
                                                 st.stop()
                                             if valor_pago <= 0:
-                                                st.error("🚨 El valor del pago debe ser mayor que cero.")
+                                                st.error("❌ El valor del pago debe ser mayor que cero.")
                                                 st.stop()
                                             if not concepto_pago:
                                                 concepto_pago = "Abono mensualidad"
@@ -1922,7 +2006,7 @@ else:
                                             nuevo_total = total_pagado + valor_pago
                                             if nuevo_total > valor_mensualidad + 0.001:
                                                 st.error(
-                                                    f"🚨 El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
+                                                    f"❌ El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
                                                 )
                                                 st.stop()
 
@@ -1952,7 +2036,7 @@ else:
 
                                             if resultado_pago.get("status") == "error":
                                                 st.error(
-                                                    "🚨 Google Apps Script reportó un error: "
+                                                    "❌ Google Apps Script reportó un error: "
                                                     + str(resultado_pago.get("message", "Error desconocido"))
                                                 )
                                                 st.stop()
@@ -1961,11 +2045,11 @@ else:
                                             st.success("✅ Pago registrado correctamente.")
                                             st.rerun()
                                         except Exception as e:
-                                            st.error(f"🚨 Error registrando el pago: {e}")
+                                            st.error(f"❌ Error registrando el pago: {e}")
 
                             # HISTORIAL DE PAGOS
                             if not pagos_cliente.empty:
-                                st.markdown("#### 📜 Historial de Pagos")
+                                titulo_ui("Historial de Pagos", "fi-rr-receipt", 4, 21)
                                 pagos_mostrar = pagos_cliente.copy()
                                 if "_fecha_dt" not in pagos_mostrar.columns:
                                     pagos_mostrar["_fecha_dt"] = (
@@ -2002,16 +2086,16 @@ else:
 
                             # HISTORIAL Y PROGRESO
                             st.markdown("---")
-                            st.markdown("#### 📈 Historial y Progreso del Cliente")
+                            titulo_ui("Historial y Progreso del Cliente", "fi-rr-chart-line-up", 4, 21)
 
                             if not df_historial.empty:
                                 h_cliente = df_historial[df_historial["cedula"] == id_cliente].copy()
                                 if not h_cliente.empty:
                                     mostrar_graficos_evolucion(h_cliente)
 
-                                    st.markdown("### 📄 Informe de Evolución del Cliente")
+                                    titulo_ui("Informe de Evolución del Cliente", "fi-rr-file-user", 3, 24)
                                     st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
-                                    if st.button("📄 Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
+                                    if st.button("Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
                                         try:
                                             pdf_bytes_admin = generar_informe_evolucion_pdf(
                                                 h_cliente,
@@ -2029,9 +2113,9 @@ else:
                                                 key=f"download_pdf_admin_{id_cliente}",
                                             )
                                         except Exception as e:
-                                            st.error(f"🚨 No fue posible generar el informe PDF: {e}")
+                                            st.error(f"❌ No fue posible generar el informe PDF: {e}")
 
-                                    st.markdown("#### 📋 Registros en Tabla")
+                                    titulo_ui("Registros en Tabla", "fi-rr-table-list", 4, 21)
                                     h_cliente["_fecha_dt"] = pd.to_datetime(
                                         h_cliente["fecha_evaluacion"],
                                         format="%d-%m-%Y",
@@ -2045,12 +2129,12 @@ else:
                                 st.info("No hay registros en el historial general.")
 
                 # CONTROL DE CLASES
-                elif opcion_admin == "️ Control de Clases":
-                    st.subheader("️ Control de Clases Personalizadas")
+                elif opcion_admin == "Control de Clases":
+                    titulo_ui("Control de Clases Personalizadas", "fi-rr-dumbbell", 2, 28)
                     st.info("Aquí el ADMIN configura el plan y registra manualmente cada clase realmente tomada.")
 
                     cliente_clase_sel = st.selectbox(
-                        "🛡️ Seleccionar Cliente:",
+                        "Seleccionar Cliente:",
                         clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"].astype(str),
                         key="selector_cliente_clases",
                     )
@@ -2058,7 +2142,7 @@ else:
                     id_cliente_clases = cliente_clase_sel.split(" - ")[0].strip()
                     nombre_cliente_clases = cliente_clase_sel.split(" - ", 1)[1]
 
-                    st.markdown(f"### 🛡️ {nombre_cliente_clases}")
+                    titulo_ui(nombre_cliente_clases, "fi-rr-user", 3, 24)
                     mostrar_resumen_clases(df_clases, id_cliente_clases)
 
                     resumen_actual = obtener_resumen_clases(df_clases, id_cliente_clases)
@@ -2067,7 +2151,7 @@ else:
                     # CONFIGURACIÓN DEL PLAN
                     # ------------------------------------------------
                     st.markdown("---")
-                    st.markdown("#### ⚙️ Registrar un nuevo plan")
+                    titulo_ui("Registrar un nuevo plan", "fi-rr-file-plus", 4, 21)
 
                     with st.form(f"form_config_clases_{id_cliente_clases}"):
                         col_plan1, col_plan2 = st.columns(2)
@@ -2103,14 +2187,14 @@ else:
                         )
 
                         guardar_config_plan = st.form_submit_button(
-                            "💾 Registrar nuevo plan",
+                            "Registrar nuevo plan",
                             use_container_width=True,
                         )
 
                         if guardar_config_plan:
                             try:
                                 if not plan_cliente:
-                                    st.error("🚨 Debes indicar el tipo o nombre del plan.")
+                                    st.error("❌ Debes indicar el tipo o nombre del plan.")
                                     st.stop()
 
                                 fecha_hoy_str = datetime.today().strftime("%d-%m-%Y")
@@ -2142,7 +2226,7 @@ else:
 
                                 if resultado_config.get("status") == "error":
                                     st.error(
-                                        "🚨 Google Apps Script reportó un error: "
+                                        "❌ Google Apps Script reportó un error: "
                                         + str(
                                             resultado_config.get(
                                                 "message",
@@ -2159,13 +2243,13 @@ else:
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"🚨 Error registrando el nuevo plan: {e}")
+                                st.error(f"❌ Error registrando el nuevo plan: {e}")
 
                     # ------------------------------------------------
                     # REGISTRAR CLASE TOMADA
                     # ------------------------------------------------
                     st.markdown("---")
-                    st.markdown("#### 📅 Registrar clase tomada")
+                    titulo_ui("Registrar clase tomada", "fi-rr-calendar-plus", 4, 21)
 
                     if (
                         resumen_actual["clases_contratadas"] > 0
@@ -2175,25 +2259,25 @@ else:
 
                     with st.form(f"form_registro_clase_{id_cliente_clases}"):
                         fecha_clase = st.date_input(
-                            "📅 Fecha de la clase tomada:",
+                            "Fecha de la clase tomada:",
                             value=date.today(),
                             max_value=date.today(),
                             format="DD-MM-YYYY",
                         )
 
                         registrar_clase = st.form_submit_button(
-                            " Registrar Clase Tomada",
+                            "Registrar Clase Tomada",
                             use_container_width=True,
                         )
 
                         if registrar_clase:
                             try:
                                 if resumen_actual["clases_contratadas"] <= 0:
-                                    st.error("🚨 Primero debes configurar el plan y el número de clases contratadas.")
+                                    st.error("❌ Primero debes configurar el plan y el número de clases contratadas.")
                                     st.stop()
 
                                 if resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]:
-                                    st.error("🚨 El cliente ya utilizó todas las clases de su plan.")
+                                    st.error("❌ El cliente ya utilizó todas las clases de su plan.")
                                     st.stop()
 
                                 fecha_clase_str = fecha_clase.strftime("%d-%m-%Y")
@@ -2211,7 +2295,7 @@ else:
                                         .tolist()
                                     )
                                     if fecha_clase_str in fechas_existentes:
-                                        st.error(f"🚨 Ya existe una clase registrada para este cliente el {fecha_clase_str}.")
+                                        st.error(f"❌ Ya existe una clase registrada para este cliente el {fecha_clase_str}.")
                                         st.stop()
 
                                 id_clase = (
@@ -2252,7 +2336,7 @@ else:
 
                                 if resultado_clase.get("status") == "error":
                                     st.error(
-                                        "🚨 Google Apps Script reportó un error: "
+                                        "❌ Google Apps Script reportó un error: "
                                         + str(resultado_clase.get("message", "Error desconocido"))
                                     )
                                     st.stop()
@@ -2262,13 +2346,13 @@ else:
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"🚨 Error registrando la clase: {e}")
+                                st.error(f"❌ Error registrando la clase: {e}")
 
                     # ------------------------------------------------
                     # HISTORIAL DE CLASES
                     # ------------------------------------------------
                     st.markdown("---")
-                    st.markdown("#### 📋 Historial de clases tomadas")
+                    titulo_ui("Historial de clases tomadas", "fi-rr-clipboard", 4, 21)
 
                     resumen_historial = obtener_resumen_clases(df_clases, id_cliente_clases)
                     registros_historial = resumen_historial["registros"]
@@ -2300,3 +2384,17 @@ else:
                         st.info("Este cliente todavía no tiene clases registradas.")
             else:
                 st.info("No hay clientes registrados actualmente.")
+
+
+# ============================================================
+# ATRIBUCIÓN DE ICONOS
+# ============================================================
+
+st.markdown(
+    """
+    <div class="ui-attribution">
+        Iconos de interfaz: <a href="https://www.flaticon.com/uicons" target="_blank">Uicons by Flaticon</a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
