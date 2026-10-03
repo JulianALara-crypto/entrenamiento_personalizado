@@ -1478,7 +1478,7 @@ if not st.session_state["autenticado"]:
 # ============================================================
 
 else:
-    st.sidebar.markdown(f"### 👤 {st.session_state['nombre']}")
+    st.sidebar.markdown(f"### 🛡️ {st.session_state['nombre']}")
     st.sidebar.markdown(f"Rol: {st.session_state['rol']}")
 
     if st.sidebar.button("Cerrar Sesión"):
@@ -1774,13 +1774,13 @@ else:
                 opcion_admin = st.sidebar.radio(
                     "MENÚ ADMINISTRADOR",
                     [
-                        "👤 Gestión de Clientes",
+                        "🛡️ Gestión de Clientes",
                         "️ Control de Clases",
                     ],
                 )
 
                 # GESTIÓN DE CLIENTES
-                if opcion_admin == "👤 Gestión de Clientes":
+                if opcion_admin == "🛡️ Gestión de Clientes":
                     cedula_sel = st.selectbox(
                         "Buscar Cliente por Nombre/Cédula:",
                         clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"].astype(str),
@@ -2050,7 +2050,7 @@ else:
                     st.info("Aquí el ADMIN configura el plan y registra manualmente cada clase realmente tomada.")
 
                     cliente_clase_sel = st.selectbox(
-                        "👤 Seleccionar Cliente:",
+                        "🛡️ Seleccionar Cliente:",
                         clientes["cedula"].astype(str) + " - " + clientes["nombre_completo"].astype(str),
                         key="selector_cliente_clases",
                     )
@@ -2058,7 +2058,7 @@ else:
                     id_cliente_clases = cliente_clase_sel.split(" - ")[0].strip()
                     nombre_cliente_clases = cliente_clase_sel.split(" - ", 1)[1]
 
-                    st.markdown(f"### 👤 {nombre_cliente_clases}")
+                    st.markdown(f"### 🛡️ {nombre_cliente_clases}")
                     mostrar_resumen_clases(df_clases, id_cliente_clases)
 
                     resumen_actual = obtener_resumen_clases(df_clases, id_cliente_clases)
