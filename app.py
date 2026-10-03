@@ -729,6 +729,334 @@ def mostrar_graficos_evolucion(df_filtrado):
 
 
 
+# ============================================================
+# INFORME DE EVOLUCIÓN EN PDF
+# ============================================================
+
+def _numero_seguro(valor):
+    try:
+        if pd.isna(valor):
+            return None
+        return float(valor)
+    except Exception:
+        return None
+
+
+def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_cliente, logo_path=None):
+    """Genera un informe PDF profesional con la evolución completa del cliente."""
+    try:
+        from io import BytesIO
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+            Image as RLImage,
+            PageBreak,
+            KeepTogether,
+        )
+    except ImportError:
+        raise RuntimeError(
+            "Para generar el PDF debes agregar 'reportlab' a requirements.txt "
+            "y volver a desplegar la aplicación."
+        )
+
+    if df_historial_cliente is None or df_historial_cliente.empty:
+        raise ValueError("El cliente no tiene evaluaciones registradas para generar el informe.")
+
+    df = df_historial_cliente.copy()
+    df["_fecha_dt"] = df["fecha_evaluacion"].apply(parsear_fecha)
+    df = df.sort_values("_fecha_dt", ascending=True, na_position="last").reset_index(drop=True)
+
+    # Si hay fechas no válidas, igual conservar los registros y mostrar su texto original.
+    if df.empty:
+        raise ValueError("No fue posible preparar las evaluaciones del cliente.")
+
+    inicial = df.iloc[0]
+    actual = df.iloc[-1]
+
+    def valor_fila(row, columna):
+        return _numero_seguro(row[columna]) if columna in row.index else None
+
+    def fmt_num(v, dec=1):
+        if v is None:
+            return "—"
+        return f"{v:,.{dec}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def fmt_cambio(v, dec=1, sufijo=""):
+        if v is None:
+            return "—"
+        signo = "+" if v > 0 else ""
+        return f"{signo}{fmt_num(v, dec)}{sufijo}"
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.35 * cm,
+        leftMargin=1.35 * cm,
+        topMargin=1.25 * cm,
+        bottomMargin=1.25 * cm,
+        title=f"Informe de Evolución - {nombre_cliente}",
+        author="Julian Avila - Personal Training & Evolution Tracker",
+    )
+
+    styles = getSampleStyleSheet()
+    titulo = ParagraphStyle(
+        "TituloInforme", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=20, leading=23, alignment=TA_CENTER, textColor=colors.HexColor("#111111"),
+        spaceAfter=5,
+    )
+    subtitulo = ParagraphStyle(
+        "Subtitulo", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=10, leading=13, alignment=TA_CENTER, textColor=colors.HexColor("#555555"),
+        spaceAfter=10,
+    )
+    h2 = ParagraphStyle(
+        "H2Informe", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        fontSize=13, leading=16, textColor=colors.HexColor("#111111"), spaceBefore=7, spaceAfter=7,
+    )
+    normal = ParagraphStyle(
+        "NormalInforme", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8.5, leading=11, textColor=colors.HexColor("#222222"),
+    )
+    small = ParagraphStyle(
+        "SmallInforme", parent=normal, fontSize=7.5, leading=9.5,
+    )
+    note = ParagraphStyle(
+        "NotaInforme", parent=normal, fontSize=7.5, leading=10,
+        textColor=colors.HexColor("#555555"),
+    )
+
+    story = []
+
+    # Logo
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            logo = RLImage(logo_path)
+            max_w = 6.2 * cm
+            max_h = 2.0 * cm
+            ratio = min(max_w / logo.imageWidth, max_h / logo.imageHeight)
+            logo.drawWidth = logo.imageWidth * ratio
+            logo.drawHeight = logo.imageHeight * ratio
+            logo.hAlign = "CENTER"
+            story.append(logo)
+            story.append(Spacer(1, 0.18 * cm))
+        except Exception:
+            pass
+
+    story.append(Paragraph("INFORME DE EVOLUCIÓN FÍSICA", titulo))
+    story.append(Paragraph("Personal Training & Evolution Tracker · Julian Avila", subtitulo))
+
+    fecha_generacion = datetime.today().strftime("%d-%m-%Y %H:%M")
+    info_data = [
+        [Paragraph("<b>Cliente</b>", normal), Paragraph(str(nombre_cliente), normal),
+         Paragraph("<b>Cédula / ID</b>", normal), Paragraph(str(cedula_cliente), normal)],
+        [Paragraph("<b>Evaluación inicial</b>", normal), Paragraph(formatear_fecha(inicial.get("fecha_evaluacion", "")), normal),
+         Paragraph("<b>Evaluación actual</b>", normal), Paragraph(formatear_fecha(actual.get("fecha_evaluacion", "")), normal)],
+        [Paragraph("<b>Evaluaciones registradas</b>", normal), Paragraph(str(len(df)), normal),
+         Paragraph("<b>Informe generado</b>", normal), Paragraph(fecha_generacion, normal)],
+    ]
+    info_table = Table(info_data, colWidths=[3.0*cm, 6.2*cm, 3.0*cm, 5.0*cm])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#F3F3F3")),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#BBBBBB")),
+        ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#D5D5D5")),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 0.28 * cm))
+
+    # Resumen de indicadores principales
+    story.append(Paragraph("1. Resumen de indicadores", h2))
+    resumen_campos = [
+        ("Peso", "peso_kg", "kg", 1),
+        ("% Grasa corporal", "porcentaje_grasa", "%", 2),
+        ("IMC", "imc", "", 2),
+        ("Calorías objetivo", "calorias_objetivo", "kcal", 0),
+        ("Edad metabólica", "edad_metabolica", "años", 0),
+    ]
+    resumen_data = [[
+        Paragraph("Indicador", small), Paragraph("Inicial", small),
+        Paragraph("Actual", small), Paragraph("Cambio", small)
+    ]]
+    for etiqueta, campo, sufijo, dec in resumen_campos:
+        vi = valor_fila(inicial, campo)
+        va = valor_fila(actual, campo)
+        cambio = (va - vi) if vi is not None and va is not None else None
+        resumen_data.append([
+            Paragraph(etiqueta, small),
+            Paragraph((fmt_num(vi, dec) + (" " + sufijo if sufijo else "")), small),
+            Paragraph((fmt_num(va, dec) + (" " + sufijo if sufijo else "")), small),
+            Paragraph((fmt_cambio(cambio, dec, (" " + sufijo if sufijo else ""))), small),
+        ])
+    resumen_table = Table(resumen_data, colWidths=[6.0*cm, 3.4*cm, 3.4*cm, 4.4*cm], repeatRows=1)
+    resumen_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#171717")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#CCCCCC")),
+        ("BACKGROUND", (0,1), (-1,-1), colors.white),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F7F7F7")]),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+    ]))
+    story.append(resumen_table)
+    story.append(Spacer(1, 0.18 * cm))
+    story.append(Paragraph(
+        "Los cambios se muestran de forma descriptiva entre la primera y la última evaluación registrada. "
+        "La interpretación debe considerar el objetivo individual y el contexto de cada evaluación.", note
+    ))
+
+    # Tabla antropométrica completa
+    story.append(Paragraph("2. Comparativa antropométrica completa", h2))
+    antropometricos = [
+        ("Cuello", "cuello_cm"),
+        ("Hombros", "hombros_cm"),
+        ("Pecho", "pecho_cm"),
+        ("Cintura / Abdomen", "cintura_cm"),
+        ("Cadera / Glúteos", "cadera_cm"),
+        ("Bíceps Derecho", "bicep_der_cm"),
+        ("Bíceps Izquierdo", "bicep_izq_cm"),
+        ("Pierna Derecha", "pierna_der_cm"),
+        ("Pierna Izquierda", "pierna_izq_cm"),
+        ("Gemelo Derecho", "gemelo_der_cm"),
+        ("Gemelo Izquierdo", "gemelo_izq_cm"),
+    ]
+    ant_data = [[
+        Paragraph("Medida", small), Paragraph("Inicial (cm)", small),
+        Paragraph("Actual (cm)", small), Paragraph("Cambio (cm)", small)
+    ]]
+    for etiqueta, campo in antropometricos:
+        vi = valor_fila(inicial, campo)
+        va = valor_fila(actual, campo)
+        cambio = (va - vi) if vi is not None and va is not None else None
+        ant_data.append([
+            Paragraph(etiqueta, small),
+            Paragraph(fmt_num(vi, 1), small),
+            Paragraph(fmt_num(va, 1), small),
+            Paragraph(fmt_cambio(cambio, 1), small),
+        ])
+    ant_table = Table(ant_data, colWidths=[7.0*cm, 3.1*cm, 3.1*cm, 4.0*cm], repeatRows=1)
+    ant_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#171717")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#CCCCCC")),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F7F7F7")]),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+    story.append(ant_table)
+
+    # Historial completo de evaluaciones
+    story.append(PageBreak())
+    story.append(Paragraph("3. Historial de evaluaciones", h2))
+    historia_campos = [
+        ("Fecha", "fecha_evaluacion"),
+        ("Peso (kg)", "peso_kg"),
+        ("% Grasa", "porcentaje_grasa"),
+        ("IMC", "imc"),
+        ("Cintura (cm)", "cintura_cm"),
+        ("Cadera (cm)", "cadera_cm"),
+        ("Pierna D (cm)", "pierna_der_cm"),
+        ("Pierna I (cm)", "pierna_izq_cm"),
+        ("Gemelo D (cm)", "gemelo_der_cm"),
+        ("Gemelo I (cm)", "gemelo_izq_cm"),
+    ]
+    hist_data = [[Paragraph(x[0], small) for x in historia_campos]]
+    for _, row in df.iterrows():
+        fila = []
+        for etiqueta, campo in historia_campos:
+            if campo == "fecha_evaluacion":
+                valor = formatear_fecha(row.get(campo, ""))
+            else:
+                n = valor_fila(row, campo)
+                valor = fmt_num(n, 1) if n is not None else "—"
+            fila.append(Paragraph(str(valor), small))
+        hist_data.append(fila)
+    hist_widths = [2.2*cm, 1.7*cm, 1.7*cm, 1.6*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm]
+    hist_table = Table(hist_data, colWidths=hist_widths, repeatRows=1)
+    hist_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#171717")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#CCCCCC")),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F7F7F7")]),
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 3),
+        ("RIGHTPADDING", (0,0), (-1,-1), 3),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+    story.append(hist_table)
+
+    # Datos complementarios de las evaluaciones
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph("4. Datos complementarios", h2))
+    comp_data = [[
+        Paragraph("Fecha", small), Paragraph("Edad", small), Paragraph("Sexo", small),
+        Paragraph("Meta", small), Paragraph("Calorías", small), Paragraph("Edad metabólica", small)
+    ]]
+    for _, row in df.iterrows():
+        comp_data.append([
+            Paragraph(formatear_fecha(row.get("fecha_evaluacion", "")), small),
+            Paragraph(fmt_num(valor_fila(row, "edad"), 0), small),
+            Paragraph(str(row.get("sexo", "—")), small),
+            Paragraph(str(row.get("meta", "—")), small),
+            Paragraph(fmt_num(valor_fila(row, "calorias_objetivo"), 0), small),
+            Paragraph(fmt_num(valor_fila(row, "edad_metabolica"), 0), small),
+        ])
+    comp_table = Table(comp_data, colWidths=[2.3*cm, 1.6*cm, 2.4*cm, 4.0*cm, 2.3*cm, 3.2*cm], repeatRows=1)
+    comp_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#171717")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#CCCCCC")),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F7F7F7")]),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 4),
+        ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+    story.append(comp_table)
+
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(Paragraph(
+        "Nota: IMC, porcentaje de grasa, calorías objetivo y edad metabólica son cálculos/estimaciones "
+        "generados por la aplicación a partir de los datos registrados. Este informe es de seguimiento "
+        "deportivo y no sustituye una valoración médica o clínica.", note
+    ))
+
+    def pie_pagina(canvas, doc_obj):
+        canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#DDDDDD"))
+        canvas.line(1.35*cm, 0.9*cm, A4[0]-1.35*cm, 0.9*cm)
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#666666"))
+        canvas.drawString(1.35*cm, 0.55*cm, "Julian Avila · Personal Training & Evolution Tracker")
+        canvas.drawRightString(A4[0]-1.35*cm, 0.55*cm, f"Página {doc_obj.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=pie_pagina, onLaterPages=pie_pagina)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 @st.cache_data(ttl=10)
 def cargar_solo_planes():
     """Carga la hoja Planes de la API y la normaliza de forma segura."""
@@ -1352,6 +1680,29 @@ else:
 
                 mostrar_graficos_evolucion(mis_registros)
 
+                st.markdown("---")
+                st.markdown("### 📄 Informe de Evolución")
+                st.caption("Genera un informe PDF con logo, resumen, comparativa completa y todo el historial antropométrico.")
+                if st.button("📄 Generar Informe de Evolución en PDF", use_container_width=True, key="btn_pdf_cliente"):
+                    try:
+                        pdf_bytes = generar_informe_evolucion_pdf(
+                            mis_registros,
+                            st.session_state.get("nombre", "Cliente"),
+                            user_id,
+                            ruta_logo,
+                        )
+                        nombre_pdf = "Informe_Evolucion_" + "".join(ch for ch in st.session_state.get("nombre", "Cliente") if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
+                        st.download_button(
+                            "⬇️ Descargar Informe PDF",
+                            data=pdf_bytes,
+                            file_name=nombre_pdf,
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="download_pdf_cliente",
+                        )
+                    except Exception as e:
+                        st.error(f"❌ No fue posible generar el informe PDF: {e}")
+
                 st.markdown("#### 📋 Historial de Registros Completos")
                 st.dataframe(mis_registros.astype(str), use_container_width=True)
             else:
@@ -1640,6 +1991,29 @@ else:
                                 h_cliente = df_historial[df_historial["cedula"] == id_cliente].copy()
                                 if not h_cliente.empty:
                                     mostrar_graficos_evolucion(h_cliente)
+
+                                    st.markdown("### 📄 Informe de Evolución del Cliente")
+                                    st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
+                                    if st.button("📄 Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
+                                        try:
+                                            pdf_bytes_admin = generar_informe_evolucion_pdf(
+                                                h_cliente,
+                                                u_info.get("nombre_completo", "Cliente"),
+                                                id_cliente,
+                                                ruta_logo,
+                                            )
+                                            nombre_admin_pdf = "Informe_Evolucion_" + "".join(ch for ch in str(u_info.get("nombre_completo", "Cliente")) if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
+                                            st.download_button(
+                                                "⬇️ Descargar Informe PDF",
+                                                data=pdf_bytes_admin,
+                                                file_name=nombre_admin_pdf,
+                                                mime="application/pdf",
+                                                use_container_width=True,
+                                                key=f"download_pdf_admin_{id_cliente}",
+                                            )
+                                        except Exception as e:
+                                            st.error(f"❌ No fue posible generar el informe PDF: {e}")
+
                                     st.markdown("#### 📋 Registros en Tabla")
                                     h_cliente["_fecha_dt"] = pd.to_datetime(
                                         h_cliente["fecha_evaluacion"],
