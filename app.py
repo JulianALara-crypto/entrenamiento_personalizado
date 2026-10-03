@@ -630,13 +630,9 @@ def mostrar_graficos_evolucion(df_filtrado):
     df_graficos = df_filtrado.copy()
 
     columnas_num = [
-        "peso_kg",
-        "porcentaje_grasa",
-        "cintura_cm",
-        "pecho_cm",
-        "cadera_cm",
-        "bicep_der_cm",
-        "bicep_izq_cm",
+        "peso_kg", "porcentaje_grasa", "cintura_cm", "pecho_cm", "cadera_cm",
+        "bicep_der_cm", "bicep_izq_cm", "pierna_der_cm", "pierna_izq_cm",
+        "gemelo_der_cm", "gemelo_izq_cm",
     ]
 
     for col in columnas_num:
@@ -644,157 +640,92 @@ def mostrar_graficos_evolucion(df_filtrado):
             df_graficos[col] = pd.to_numeric(df_graficos[col], errors="coerce")
 
     df_graficos["fecha_dt"] = pd.to_datetime(
-        df_graficos["fecha_evaluacion"],
-        format="%d-%m-%Y",
-        errors="coerce"
+        df_graficos["fecha_evaluacion"], format="%d-%m-%Y", errors="coerce"
     )
-
     if df_graficos["fecha_dt"].isna().any():
         df_graficos["fecha_dt"] = pd.to_datetime(
-            df_graficos["fecha_evaluacion"],
-            errors="coerce"
+            df_graficos["fecha_evaluacion"], errors="coerce"
         )
 
     df_graficos = (
-        df_graficos
-        .dropna(subset=["fecha_dt"])
-        .sort_values(by="fecha_dt")
+        df_graficos.dropna(subset=["fecha_dt"]).sort_values(by="fecha_dt")
     )
+    if df_graficos.empty:
+        st.info("No hay fechas válidas para construir las gráficas.")
+        return
 
     df_graficos["Fecha"] = df_graficos["fecha_dt"].dt.strftime("%d-%m-%Y")
 
     st.markdown("### 📈 Gráficas de Evolución Temporal")
 
-    tab1, tab2, tab3 = st.tabs(
-        [
-            "⚖️ Peso y Composición",
-            "📏 Perímetros Principales",
-            "💪 Extremidades",
-        ]
-    )
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "⚖️ Peso y Composición",
+        "📏 Perímetros Principales",
+        "💪 Extremidades Superiores",
+        "🦵 Piernas y Glúteos",
+    ])
 
     with tab1:
         col_g1, col_g2 = st.columns(2)
-
         with col_g1:
-            st.markdown(
-                "<p style='text-align: center;'>Evolución del Peso Corporal (kg)</p>",
-                unsafe_allow_html=True,
-            )
-            df_peso = (
-                df_graficos
-                .set_index("Fecha")[["peso_kg"]]
-                .rename(columns={"peso_kg": "Peso (kg)"})
-            )
-            st.line_chart(df_peso)
-
+            st.markdown("<p style='text-align:center;'>Evolución del Peso Corporal (kg)</p>", unsafe_allow_html=True)
+            if "peso_kg" in df_graficos.columns:
+                st.line_chart(
+                    df_graficos.set_index("Fecha")[["peso_kg"]].rename(columns={"peso_kg": "Peso (kg)"})
+                )
         with col_g2:
-            st.markdown(
-                "<p style='text-align: center;'>Evolución del % de Grasa Corporal</p>",
-                unsafe_allow_html=True,
-            )
-            df_grasa = (
-                df_graficos
-                .set_index("Fecha")[["porcentaje_grasa"]]
-                .rename(columns={"porcentaje_grasa": "% Grasa"})
-            )
-            st.line_chart(df_grasa)
+            st.markdown("<p style='text-align:center;'>Evolución del % de Grasa Corporal</p>", unsafe_allow_html=True)
+            if "porcentaje_grasa" in df_graficos.columns:
+                st.line_chart(
+                    df_graficos.set_index("Fecha")[["porcentaje_grasa"]].rename(columns={"porcentaje_grasa": "% Grasa"})
+                )
 
     with tab2:
-        st.markdown(
-            "<p style='text-align: center;'>Evolución de Torso y Cintura (cm)</p>",
-            unsafe_allow_html=True,
-        )
-
-        columnas_perimetros = []
-        nombres_perimetros = {}
-
-        if "cintura_cm" in df_graficos.columns:
-            columnas_perimetros.append("cintura_cm")
-            nombres_perimetros["cintura_cm"] = "Cintura"
-
-        if "pecho_cm" in df_graficos.columns:
-            columnas_perimetros.append("pecho_cm")
-            nombres_perimetros["pecho_cm"] = "Pecho"
-
-        if "cadera_cm" in df_graficos.columns:
-            columnas_perimetros.append("cadera_cm")
-            nombres_perimetros["cadera_cm"] = "Cadera/Glúteos"
-
-        if columnas_perimetros:
-            df_peri = (
-                df_graficos
-                .set_index("Fecha")[columnas_perimetros]
-                .rename(columns=nombres_perimetros)
-            )
-            st.line_chart(df_peri)
+        st.markdown("<p style='text-align:center;'>Evolución de Torso y Cintura (cm)</p>", unsafe_allow_html=True)
+        cols, names = [], {}
+        for col, name in [("cintura_cm", "Cintura"), ("pecho_cm", "Pecho"), ("cadera_cm", "Cadera / Glúteos")]:
+            if col in df_graficos.columns:
+                cols.append(col); names[col] = name
+        if cols:
+            st.line_chart(df_graficos.set_index("Fecha")[cols].rename(columns=names))
+        else:
+            st.info("No hay perímetros registrados.")
 
     with tab3:
-        st.markdown(
-            "<p style='text-align: center;'>Evolución de Brazos (cm)</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<p style='text-align:center;'>Evolución de Brazos (cm)</p>", unsafe_allow_html=True)
+        cols, names = [], {}
+        for col, name in [("bicep_der_cm", "Bícep Derecho"), ("bicep_izq_cm", "Bícep Izquierdo")]:
+            if col in df_graficos.columns:
+                cols.append(col); names[col] = name
+        if cols:
+            st.line_chart(df_graficos.set_index("Fecha")[cols].rename(columns=names))
+        else:
+            st.info("No hay medidas de brazos registradas.")
 
-        columnas_brazos = []
-        nombres_brazos = {}
+    with tab4:
+        st.markdown("<p style='text-align:center;'>Comparativa de Piernas (cm)</p>", unsafe_allow_html=True)
+        cols, names = [], {}
+        for col, name in [("pierna_der_cm", "Pierna Derecha"), ("pierna_izq_cm", "Pierna Izquierda")]:
+            if col in df_graficos.columns:
+                cols.append(col); names[col] = name
+        if cols:
+            st.line_chart(df_graficos.set_index("Fecha")[cols].rename(columns=names))
+        else:
+            st.info("No hay medidas de piernas registradas.")
 
-        if "bicep_der_cm" in df_graficos.columns:
-            columnas_brazos.append("bicep_der_cm")
-            nombres_brazos["bicep_der_cm"] = "Bícep Derecho"
-
-        if "bicep_izq_cm" in df_graficos.columns:
-            columnas_brazos.append("bicep_izq_cm")
-            nombres_brazos["bicep_izq_cm"] = "Bícep Izquierdo"
-
-        if columnas_brazos:
-            df_brz = (
-                df_graficos
-                .set_index("Fecha")[columnas_brazos]
-                .rename(columns=nombres_brazos)
-            )
-            st.line_chart(df_brz)
-
-
-# ============================================================
-# RESUMEN DE CLASES
-# ============================================================
-
-@st.cache_data(ttl=10)
-def cargar_solo_planes():
-    """Descarga Planes y normaliza su estructura, incluso si la API devuelve objetos."""
-    try:
-        res = requests.get(URL_API, timeout=30).json()
-        planes_raw = res.get("planes", [])
-        df_pl = construir_dataframe(
-            planes_raw,
-            [
-                "cedula",
-                "nombre_completo",
-                "tipo_plan",
-                "fecha_inicio",
-                "fecha_fin",
-                "estado",
-                "observaciones",
-                "clases_incluidas",
-                "id_plan",
-            ],
-        )
-
-        if not df_pl.empty:
-            if "clases_incluidas" in df_pl.columns:
-                df_pl["clases_incluidas"] = pd.to_numeric(
-                    df_pl["clases_incluidas"], errors="coerce"
-                ).fillna(0)
-
-            if "fecha_inicio" in df_pl.columns:
-                df_pl["_fecha_inicio_dt"] = df_pl["fecha_inicio"].apply(parsear_fecha)
-            else:
-                df_pl["_fecha_inicio_dt"] = pd.NaT
-
-        return df_pl
-
-    except Exception:
-        return pd.DataFrame()
+        st.markdown("<p style='text-align:center;'>Comparativa de Glúteos y Gemelos (cm)</p>", unsafe_allow_html=True)
+        cols, names = [], {}
+        for col, name in [
+            ("cadera_cm", "Glúteos / Cadera"),
+            ("gemelo_der_cm", "Gemelo Derecho"),
+            ("gemelo_izq_cm", "Gemelo Izquierdo"),
+        ]:
+            if col in df_graficos.columns:
+                cols.append(col); names[col] = name
+        if cols:
+            st.line_chart(df_graficos.set_index("Fecha")[cols].rename(columns=names))
+        else:
+            st.info("No hay medidas de glúteos/cadera o gemelos registradas.")
 
 
 def obtener_resumen_clases(df_clases, cedula):
