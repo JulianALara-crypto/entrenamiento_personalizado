@@ -1381,7 +1381,7 @@ if not st.session_state["autenticado"]:
                 if error_usuarios:
                     st.error(f"⚠️ {error_usuarios}")
                 elif df_usuarios.empty or "cedula" not in df_usuarios.columns:
-                    st.error("❌ No fue posible verificar los usuarios en este momento. Intenta nuevamente.")
+                    st.error("🚨 No fue posible verificar los usuarios en este momento. Intenta nuevamente.")
                 elif normalizar_cedula(cedula_ingreso) in df_usuarios["cedula"].values:
                     u = df_usuarios[df_usuarios["cedula"] == normalizar_cedula(cedula_ingreso)].iloc[0]
 
@@ -1392,9 +1392,9 @@ if not st.session_state["autenticado"]:
                         st.session_state["nombre"] = u["nombre_completo"]
                         st.rerun()
                     else:
-                        st.error("❌ Contraseña incorrecta.")
+                        st.error("🚨 Contraseña incorrecta.")
                 else:
-                    st.error("❌ Cédula no registrada.")
+                    st.error("🚨 Cédula no registrada.")
 
     # REGISTRO
     with col2:
@@ -1422,7 +1422,7 @@ if not st.session_state["autenticado"]:
                 elif not reg_cedula or not reg_nombre or not reg_pass:
                     st.error("⚠️ Cédula, Nombre y Contraseña son obligatorios.")
                 elif not df_usuarios.empty and normalizar_cedula(reg_cedula) in df_usuarios["cedula"].values:
-                    st.error("❌ Esta cédula ya está registrada.")
+                    st.error("🚨 Esta cédula ya está registrada.")
                 else:
                     datos_usuario = {
                         "action": "registrar_usuario",
@@ -1455,7 +1455,7 @@ if not st.session_state["autenticado"]:
 
                         if str(resultado_registro.get("status", "")).lower() == "error":
                             st.error(
-                                "❌ Google Apps Script reportó un error: "
+                                "🚨 Google Apps Script reportó un error: "
                                 + str(
                                     resultado_registro.get(
                                         "message",
@@ -1471,7 +1471,7 @@ if not st.session_state["autenticado"]:
                             )
 
                     except Exception as e:
-                        st.error(f"❌ Error al guardar usuario: {e}")
+                        st.error(f"🚨 Error al guardar usuario: {e}")
 
 # ============================================================
 # APLICACIÓN AUTENTICADA
@@ -1627,7 +1627,7 @@ else:
 
                         if resultado_api.get("status") == "error":
                             st.error(
-                                "❌ Google Apps Script reportó un error: "
+                                "🚨 Google Apps Script reportó un error: "
                                 + str(resultado_api.get("message", "Error desconocido"))
                             )
                             st.stop()
@@ -1642,7 +1642,7 @@ else:
                         r4.metric("Edad Metabólica", f"{edad_bio} años")
 
                     except Exception as e:
-                        st.error(f"❌ Error calculando o guardando las medidas: {e}")
+                        st.error(f"🚨 Error calculando o guardando las medidas: {e}")
 
         # VER PROGRESO
         elif opcion == " Ver Mi Progreso":
@@ -1718,7 +1718,7 @@ else:
                             key="download_pdf_cliente",
                         )
                     except Exception as e:
-                        st.error(f"❌ No fue posible generar el informe PDF: {e}")
+                        st.error(f"🚨 No fue posible generar el informe PDF: {e}")
 
                 st.markdown("####  Historial de Registros Completos")
                 st.dataframe(mis_registros.astype(str), use_container_width=True)
@@ -1911,10 +1911,10 @@ else:
                                             valor_pago = float(valor_pago)
 
                                             if valor_mensualidad <= 0:
-                                                st.error("❌ La mensualidad debe ser mayor que cero.")
+                                                st.error("🚨 La mensualidad debe ser mayor que cero.")
                                                 st.stop()
                                             if valor_pago <= 0:
-                                                st.error("❌ El valor del pago debe ser mayor que cero.")
+                                                st.error("🚨 El valor del pago debe ser mayor que cero.")
                                                 st.stop()
                                             if not concepto_pago:
                                                 concepto_pago = "Abono mensualidad"
@@ -1922,7 +1922,7 @@ else:
                                             nuevo_total = total_pagado + valor_pago
                                             if nuevo_total > valor_mensualidad + 0.001:
                                                 st.error(
-                                                    f"❌ El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
+                                                    f"🚨 El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
                                                 )
                                                 st.stop()
 
@@ -1952,7 +1952,7 @@ else:
 
                                             if resultado_pago.get("status") == "error":
                                                 st.error(
-                                                    "❌ Google Apps Script reportó un error: "
+                                                    "🚨 Google Apps Script reportó un error: "
                                                     + str(resultado_pago.get("message", "Error desconocido"))
                                                 )
                                                 st.stop()
@@ -1961,7 +1961,7 @@ else:
                                             st.success("✅ Pago registrado correctamente.")
                                             st.rerun()
                                         except Exception as e:
-                                            st.error(f"❌ Error registrando el pago: {e}")
+                                            st.error(f"🚨 Error registrando el pago: {e}")
 
                             # HISTORIAL DE PAGOS
                             if not pagos_cliente.empty:
@@ -2029,7 +2029,7 @@ else:
                                                 key=f"download_pdf_admin_{id_cliente}",
                                             )
                                         except Exception as e:
-                                            st.error(f"❌ No fue posible generar el informe PDF: {e}")
+                                            st.error(f"🚨 No fue posible generar el informe PDF: {e}")
 
                                     st.markdown("#### 📋 Registros en Tabla")
                                     h_cliente["_fecha_dt"] = pd.to_datetime(
@@ -2110,7 +2110,7 @@ else:
                         if guardar_config_plan:
                             try:
                                 if not plan_cliente:
-                                    st.error("❌ Debes indicar el tipo o nombre del plan.")
+                                    st.error("🚨 Debes indicar el tipo o nombre del plan.")
                                     st.stop()
 
                                 fecha_hoy_str = datetime.today().strftime("%d-%m-%Y")
@@ -2142,7 +2142,7 @@ else:
 
                                 if resultado_config.get("status") == "error":
                                     st.error(
-                                        "❌ Google Apps Script reportó un error: "
+                                        "🚨 Google Apps Script reportó un error: "
                                         + str(
                                             resultado_config.get(
                                                 "message",
@@ -2159,7 +2159,7 @@ else:
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"❌ Error registrando el nuevo plan: {e}")
+                                st.error(f"🚨 Error registrando el nuevo plan: {e}")
 
                     # ------------------------------------------------
                     # REGISTRAR CLASE TOMADA
@@ -2189,11 +2189,11 @@ else:
                         if registrar_clase:
                             try:
                                 if resumen_actual["clases_contratadas"] <= 0:
-                                    st.error("❌ Primero debes configurar el plan y el número de clases contratadas.")
+                                    st.error("🚨 Primero debes configurar el plan y el número de clases contratadas.")
                                     st.stop()
 
                                 if resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]:
-                                    st.error("❌ El cliente ya utilizó todas las clases de su plan.")
+                                    st.error("🚨 El cliente ya utilizó todas las clases de su plan.")
                                     st.stop()
 
                                 fecha_clase_str = fecha_clase.strftime("%d-%m-%Y")
@@ -2211,7 +2211,7 @@ else:
                                         .tolist()
                                     )
                                     if fecha_clase_str in fechas_existentes:
-                                        st.error(f"❌ Ya existe una clase registrada para este cliente el {fecha_clase_str}.")
+                                        st.error(f"🚨 Ya existe una clase registrada para este cliente el {fecha_clase_str}.")
                                         st.stop()
 
                                 id_clase = (
@@ -2252,7 +2252,7 @@ else:
 
                                 if resultado_clase.get("status") == "error":
                                     st.error(
-                                        "❌ Google Apps Script reportó un error: "
+                                        "🚨 Google Apps Script reportó un error: "
                                         + str(resultado_clase.get("message", "Error desconocido"))
                                     )
                                     st.stop()
@@ -2262,7 +2262,7 @@ else:
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"❌ Error registrando la clase: {e}")
+                                st.error(f"🚨 Error registrando la clase: {e}")
 
                     # ------------------------------------------------
                     # HISTORIAL DE CLASES
