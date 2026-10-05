@@ -2632,7 +2632,7 @@ else:
                                     mostrar_graficos_evolucion(h_cliente)
 
                                     titulo_ui("Informe de Evolución del Cliente", "fi-rr-file-user", 3, 24)
-                                    st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
+                                    st.caption("Indicadores y Datos básicos Full Body.")
                                     if st.button("Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
                                         try:
                                             pdf_bytes_admin = generar_informe_evolucion_pdf(
