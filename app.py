@@ -137,7 +137,7 @@ st.markdown(
         text-align: right;
         color: #777777;
         font-size: 0.75rem;
-        margin-top: 60px;
+        margin-top: 90px;
         padding: 12px 0;
         border-top: 1px solid #222222;
     }
