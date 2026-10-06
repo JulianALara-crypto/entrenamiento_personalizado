@@ -134,10 +134,10 @@ st.markdown(
     }
 
     .ui-attribution {
-        text-align: center;
+        text-align: right;
         color: #777777;
         font-size: 0.75rem;
-        margin-top: 30px;
+        margin-top: 60px;
         padding: 12px 0;
         border-top: 1px solid #222222;
     }
