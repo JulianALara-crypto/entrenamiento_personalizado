@@ -134,17 +134,153 @@ st.markdown(
     }
 
     .ui-attribution {
-        text-align: right;
+        display:none !important;
+        text-align: center;
         color: #777777;
         font-size: 0.75rem;
-        margin-top: 160px;
+        margin-top: 30px;
         padding: 12px 0;
         border-top: 1px solid #222222;
     }
 
     .ui-attribution a { color: #aaaaaa !important; text-decoration: none; }
 
-    </style>
+    
+    /* ==========================================================
+       GLASS/WOW 3D - PALETA POR MÓDULO + CONTROLES DINÁMICOS
+       Capa visual. No cambia la lógica de negocio.
+       ========================================================== */
+    :root {
+        --ui-cyan: #22d3ee;
+        --ui-blue: #38bdf8;
+        --ui-violet: #a78bfa;
+        --ui-green: #34d399;
+        --ui-amber: #fbbf24;
+        --ui-coral: #fb7185;
+    }
+
+    section[data-testid="stSidebar"] {
+        background:
+            radial-gradient(circle at 15% 10%, rgba(34,211,238,.055), transparent 24%),
+            radial-gradient(circle at 85% 80%, rgba(167,139,250,.045), transparent 25%),
+            linear-gradient(180deg, #08090c 0%, #030405 100%) !important;
+        border-right: 1px solid rgba(255,255,255,.075) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] {
+        gap: 7px !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label {
+        position: relative;
+        min-height: 43px;
+        padding: 9px 12px !important;
+        margin: 0 !important;
+        border: 1px solid rgba(255,255,255,.055) !important;
+        border-radius: 13px !important;
+        background: rgba(255,255,255,.018) !important;
+        transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease !important;
+        overflow: hidden;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:hover {
+        transform: translateX(3px) !important;
+        background: rgba(255,255,255,.045) !important;
+        border-color: rgba(255,255,255,.12) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+        background: linear-gradient(90deg, rgba(34,211,238,.13), rgba(34,211,238,.035)) !important;
+        border-color: rgba(34,211,238,.45) !important;
+        box-shadow: 0 0 22px rgba(34,211,238,.10), inset 3px 0 0 rgba(34,211,238,.95) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child(2):has(input:checked) {
+        background: linear-gradient(90deg, rgba(167,139,250,.14), rgba(167,139,250,.035)) !important;
+        border-color: rgba(167,139,250,.45) !important;
+        box-shadow: 0 0 22px rgba(167,139,250,.10), inset 3px 0 0 rgba(167,139,250,.95) !important;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child(3):has(input:checked) {
+        background: linear-gradient(90deg, rgba(52,211,153,.14), rgba(52,211,153,.035)) !important;
+        border-color: rgba(52,211,153,.45) !important;
+        box-shadow: 0 0 22px rgba(52,211,153,.10), inset 3px 0 0 rgba(52,211,153,.95) !important;
+    }
+
+    div[data-baseweb="input"] > div:focus-within,
+    div[data-baseweb="textarea"] > div:focus-within,
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: rgba(34,211,238,.65) !important;
+        box-shadow: 0 0 0 1px rgba(34,211,238,.30), 0 0 22px rgba(34,211,238,.09), inset 0 2px 8px rgba(0,0,0,.48) !important;
+    }
+
+    div.stButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    div.stDownloadButton > button:hover {
+        border-color: rgba(34,211,238,.52) !important;
+        box-shadow: 0 14px 32px rgba(0,0,0,.55), 0 0 20px rgba(34,211,238,.08), inset 0 1px 0 rgba(255,255,255,.14) !important;
+    }
+
+    div[data-testid="stMetric"] {
+        border-top: 2px solid rgba(34,211,238,.72) !important;
+    }
+    div[data-testid="stMetric"]:nth-child(2) { border-top-color: rgba(167,139,250,.78) !important; }
+    div[data-testid="stMetric"]:nth-child(3) { border-top-color: rgba(52,211,153,.78) !important; }
+    div[data-testid="stMetric"]:nth-child(4) { border-top-color: rgba(251,191,36,.82) !important; }
+
+    .ui-section-title { text-shadow: 0 0 20px rgba(34,211,238,.06); }
+    .ui-section-title .fi { filter: drop-shadow(0 0 9px currentColor); }
+
+    .clase-card { border-left: 3px solid rgba(34,211,238,.72) !important; }
+    .clase-card:hover {
+        border-left-color: rgba(167,139,250,.95) !important;
+        box-shadow: 0 20px 42px rgba(0,0,0,.48), 0 0 22px rgba(167,139,250,.07), inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border-color: rgba(255,255,255,.10) !important;
+        box-shadow: 0 16px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+
+    /* BARRA DE PROGRESO DINÁMICA */
+    .wow-progress-wrap {
+        margin: 13px 0 18px 0;
+        padding: 14px 16px 13px;
+        border-radius: 17px;
+        border: 1px solid rgba(255,255,255,.08);
+        background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
+        box-shadow: 0 12px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.055);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .wow-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px; }
+    .wow-progress-label { color:#a7a7a7; font-size:12px; font-weight:800; letter-spacing:.7px; text-transform:uppercase; }
+    .wow-progress-value { color:#fff; font-size:15px; font-weight:900; text-shadow:0 0 14px rgba(34,211,238,.18); }
+    .wow-progress-track {
+        position:relative; width:100%; height:13px; overflow:hidden; border-radius:999px;
+        background:#090b0f; border:1px solid rgba(255,255,255,.07);
+        box-shadow: inset 0 3px 7px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.025);
+    }
+    .wow-progress-fill {
+        position:relative; height:100%; width:var(--progress-width); border-radius:999px;
+        background:linear-gradient(90deg, var(--progress-start), var(--progress-mid), var(--progress-end));
+        box-shadow:0 0 12px var(--progress-glow), 0 0 25px var(--progress-glow);
+        animation: wowProgressIn 1.15s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .wow-progress-fill::before {
+        content:""; position:absolute; inset:0;
+        background:linear-gradient(105deg, transparent 0%, rgba(255,255,255,.06) 38%, rgba(255,255,255,.68) 50%, rgba(255,255,255,.06) 62%, transparent 100%);
+        transform:translateX(-120%); animation: wowProgressShine 2.8s ease-in-out 1.05s infinite;
+    }
+    .wow-progress-fill::after {
+        content:""; position:absolute; inset:1px 0 auto 0; height:35%; border-radius:999px;
+        background:linear-gradient(180deg, rgba(255,255,255,.32), transparent); opacity:.65;
+    }
+    .wow-progress-scale { display:flex; justify-content:space-between; margin-top:7px; color:#686868; font-size:10px; font-weight:700; }
+    @keyframes wowProgressIn { from { width:0; opacity:.35; filter:brightness(.7); } to { width:var(--progress-width); opacity:1; filter:brightness(1); } }
+    @keyframes wowProgressShine { 0%,35% { transform:translateX(-120%); } 70%,100% { transform:translateX(120%); } }
+    @media (prefers-reduced-motion: reduce) { .wow-progress-fill, .wow-progress-fill::before { animation:none !important; } }
+
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -580,11 +716,27 @@ st.markdown(
 
 
 def icono_ui(clase, tamano=28):
+    """Icono UI con color contextual por módulo; solo cambia presentación."""
+    colores = {
+        "fi-rr-user": "#22d3ee",
+        "fi-rr-users": "#22d3ee",
+        "fi-rr-file-user": "#22d3ee",
+        "fi-rr-dashboard": "#38bdf8",
+        "fi-rr-apps": "#38bdf8",
+        "fi-rr-dumbbell": "#a78bfa",
+        "fi-rr-ruler-horizontal": "#a78bfa",
+        "fi-rr-clipboard": "#34d399",
+        "fi-rr-wallet": "#34d399",
+        "fi-rr-credit-card": "#34d399",
+        "fi-rr-calendar": "#fbbf24",
+        "fi-rr-bell": "#fbbf24",
+        "fi-rr-document": "#fb7185",
+    }
+    color = colores.get(clase, "#e5e7eb")
     return (
-        f'<i class=\"fi {clase}\" style=\"font-size:{tamano}px; '
-        'vertical-align:middle; margin-right:10px;\"></i>'
+        f'<i class="fi {clase}" style="font-size:{tamano}px; color:{color}; '
+        'vertical-align:middle; margin-right:10px;"></i>'
     )
-
 
 def titulo_ui(texto, clase_icono="fi-rr-apps", nivel=2, tamano=30):
     tag = f"h{nivel}"
@@ -1807,22 +1959,29 @@ def mostrar_resumen_clases(
     c3.metric("Clases tomadas", resumen["clases_tomadas"])
     c4.metric("Clases restantes", resumen["clases_restantes"])
 
-    st.progress(int(round(resumen["porcentaje"])))
+    porcentaje = float(resumen["porcentaje"])
+    if porcentaje < 50:
+        p_start, p_mid, p_end, p_glow = "#38bdf8", "#22d3ee", "#34d399", "#22d3ee"
+    elif porcentaje < 80:
+        p_start, p_mid, p_end, p_glow = "#22d3ee", "#a78bfa", "#fbbf24", "#a78bfa"
+    else:
+        p_start, p_mid, p_end, p_glow = "#fbbf24", "#fb7185", "#ef4444", "#fb7185"
 
+    porcentaje_seguro = max(0.0, min(porcentaje, 100.0))
     st.markdown(
         f"""
-        <div style="
-            text-align:center;
-            font-size:18px;
-            margin-top:-10px;
-            margin-bottom:15px;
-        ">
-        <strong>
-        {resumen['porcentaje']:.1f}% del plan utilizado
-        </strong>
+        <div class="wow-progress-wrap">
+            <div class="wow-progress-head">
+                <span class="wow-progress-label">Progreso del plan · {resumen['clases_tomadas']} de {resumen['clases_contratadas']} clases</span>
+                <span class="wow-progress-value">{porcentaje:.1f}%</span>
+            </div>
+            <div class="wow-progress-track" role="progressbar" aria-valuenow="{porcentaje_seguro:.1f}" aria-valuemin="0" aria-valuemax="100">
+                <div class="wow-progress-fill" style="--progress-width:{porcentaje_seguro:.2f}%; --progress-start:{p_start}; --progress-mid:{p_mid}; --progress-end:{p_end}; --progress-glow:{p_glow};"></div>
+            </div>
+            <div class="wow-progress-scale"><span>0 clases</span><span>{resumen['clases_restantes']} restantes</span><span>Plan completo</span></div>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
@@ -2457,7 +2616,7 @@ else:
                                     valor_mensualidad_actual = float(mensualidades_validas.iloc[-1])
 
                             if valor_mensualidad_actual <= 0:
-                                valor_mensualidad_actual = 400000.0
+                                valor_mensualidad_actual = 250000.0
 
                             total_pagado = 0.0
                             if not pagos_mes_actual.empty and "valor" in pagos_mes_actual.columns:
@@ -2632,7 +2791,7 @@ else:
                                     mostrar_graficos_evolucion(h_cliente)
 
                                     titulo_ui("Informe de Evolución del Cliente", "fi-rr-file-user", 3, 24)
-                                    st.caption("Indicadores y Datos básicos Full Body.")
+                                    st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
                                     if st.button("Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
                                         try:
                                             pdf_bytes_admin = generar_informe_evolucion_pdf(
