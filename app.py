@@ -709,6 +709,149 @@ st.markdown(
     @keyframes heroFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
     @keyframes orbMove { from{transform:translate(-15px,8px) scale(.9)} to{transform:translate(18px,28px) scale(1.15)} }
     @media (prefers-reduced-motion: reduce) { .dashboard-hero,.dashboard-hero::before { animation:none !important; } .dashboard-card { transition:none !important; } }
+
+
+    /* ========================================================
+       PALETA PREMIUM AZUL PETRÓLEO + VERDE OLIVA
+       Capa visual: no modifica lógica ni datos.
+       ======================================================== */
+    .stApp {
+        background:
+            radial-gradient(circle at 8% 10%, rgba(43, 177, 224, .16), transparent 25%),
+            radial-gradient(circle at 88% 14%, rgba(126, 145, 76, .14), transparent 27%),
+            radial-gradient(circle at 72% 88%, rgba(49, 155, 119, .09), transparent 24%),
+            linear-gradient(135deg, #06121b 0%, #0a222b 48%, #18281f 100%) !important;
+        background-size: 150% 150%;
+        animation: premiumAmbient 22s ease-in-out infinite alternate;
+    }
+
+    @keyframes premiumAmbient {
+        0% { background-position: 0% 0%; }
+        50% { background-position: 100% 35%; }
+        100% { background-position: 35% 100%; }
+    }
+
+    /* Glass más luminoso, pero sobrio */
+    .dashboard-card,
+    div[data-testid="stMetric"],
+    .clase-card,
+    div[data-testid="stForm"],
+    div[data-testid="stExpander"] {
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.018)) !important;
+        border-color: rgba(185, 224, 218, .12) !important;
+        box-shadow:
+            0 20px 48px rgba(0,0,0,.30),
+            inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+
+    .dashboard-card:hover,
+    div[data-testid="stMetric"]:hover,
+    .clase-card:hover {
+        border-color: rgba(76, 205, 224, .30) !important;
+        box-shadow:
+            0 25px 58px rgba(0,0,0,.38),
+            0 0 28px rgba(54,185,232,.07),
+            inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+
+    /* Cabeceras de módulos */
+    .ui-module-header {
+        border-color: rgba(255,255,255,.11) !important;
+        background:
+            linear-gradient(135deg, rgba(54,185,232,.075), rgba(127,143,82,.065) 55%, rgba(255,255,255,.018)) !important;
+        box-shadow:
+            0 14px 32px rgba(0,0,0,.25),
+            inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+
+    /* Acentos de iconos por contexto */
+    .ui-module-icon { filter: drop-shadow(0 0 10px currentColor); }
+    .ui-module-header .fi-rr-users,
+    .ui-module-header .fi-rr-user { color:#4fc3e8 !important; }
+    .ui-module-header .fi-rr-dumbbell,
+    .ui-module-header .fi-rr-chart-histogram { color:#9b8cff !important; }
+    .ui-module-header .fi-rr-calendar,
+    .ui-module-header .fi-rr-check { color:#55d5aa !important; }
+    .ui-module-header .fi-rr-money,
+    .ui-module-header .fi-rr-credit-card { color:#e5bd67 !important; }
+
+    /* Botones: color premium, no arcoíris */
+    div.stButton > button,
+    div.stFormSubmitButton > button,
+    div.stDownloadButton > button,
+    a[data-testid="stLinkButton"] {
+        background: linear-gradient(135deg, rgba(42,164,207,.20), rgba(91,119,68,.18)) !important;
+        border-color: rgba(108,203,215,.22) !important;
+        box-shadow:
+            0 9px 25px rgba(0,0,0,.24),
+            inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+
+    div.stButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    div.stDownloadButton > button:hover,
+    a[data-testid="stLinkButton"]:hover {
+        background: linear-gradient(135deg, rgba(54,185,232,.30), rgba(127,143,82,.25)) !important;
+        border-color: rgba(112,218,226,.48) !important;
+        box-shadow:
+            0 15px 34px rgba(0,0,0,.30),
+            0 0 24px rgba(54,185,232,.10) !important;
+    }
+
+    /* Barra de progreso: azul -> violeta -> oliva/verde según avance */
+    .wow-progress-wrap {
+        background: linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.018)) !important;
+        border: 1px solid rgba(177,218,207,.13) !important;
+        box-shadow:
+            0 20px 46px rgba(0,0,0,.30),
+            inset 0 1px 0 rgba(255,255,255,.07) !important;
+        backdrop-filter: blur(18px);
+    }
+
+    .wow-progress-track {
+        background: rgba(2,12,17,.62) !important;
+        border: 1px solid rgba(255,255,255,.07);
+        box-shadow: inset 0 2px 7px rgba(0,0,0,.42) !important;
+    }
+
+    .wow-progress-fill {
+        background: linear-gradient(90deg, var(--progress-start), var(--progress-mid), var(--progress-end)) !important;
+        box-shadow:
+            0 0 14px var(--progress-glow),
+            0 0 30px var(--progress-glow) !important;
+    }
+
+    .wow-progress-fill::after {
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent) !important;
+        animation: wowProgressShine 2.4s ease-in-out infinite !important;
+    }
+
+    @keyframes wowProgressShine {
+        0% { transform: translateX(-140%); opacity:0; }
+        18% { opacity:1; }
+        52% { opacity:.9; }
+        100% { transform: translateX(520%); opacity:0; }
+    }
+
+    /* Tabla más limpia */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid rgba(176,218,211,.11) !important;
+        box-shadow: 0 18px 40px rgba(0,0,0,.25) !important;
+        border-radius: 16px !important;
+    }
+
+    /* Sidebar: azul petróleo con oliva casi imperceptible */
+    section[data-testid="stSidebar"] {
+        background:
+            radial-gradient(circle at 15% 8%, rgba(54,185,232,.09), transparent 28%),
+            linear-gradient(180deg, rgba(4,15,22,.98), rgba(14,25,22,.98)) !important;
+        border-right: 1px solid rgba(103,194,203,.10) !important;
+    }
+
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        background: linear-gradient(90deg, rgba(54,185,232,.10), rgba(127,143,82,.07)) !important;
+    }
 </style>
     """,
     unsafe_allow_html=True,
