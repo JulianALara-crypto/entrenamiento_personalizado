@@ -1,6 +1,5 @@
 import math
 import os
-import io
 import urllib.parse
 from datetime import datetime, date
 
@@ -145,113 +144,6 @@ st.markdown(
     }
 
     .ui-attribution a { color: #aaaaaa !important; text-decoration: none; }
-
-    /* ==========================================================
-       ENCABEZADO PRINCIPAL - LOGO IZQUIERDA + TÍTULO CENTRADO
-       ========================================================== */
-    .app-main-header {
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 112px;
-        margin: 4px 0 24px 0;
-        padding: 16px 28px;
-        border: 1px solid rgba(255,255,255,.08);
-        border-radius: 24px;
-        background: linear-gradient(135deg, rgba(12,24,31,.72), rgba(20,28,20,.52));
-        box-shadow: 0 16px 40px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.045);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        overflow: hidden;
-    }
-
-    .app-main-header::before {
-        content: "";
-        position: absolute;
-        width: 260px;
-        height: 120px;
-        left: -90px;
-        top: -65px;
-        background: radial-gradient(circle, rgba(34,211,238,.14), transparent 68%);
-        pointer-events: none;
-    }
-
-    .app-main-header::after {
-        content: "";
-        position: absolute;
-        width: 300px;
-        height: 130px;
-        right: -110px;
-        bottom: -80px;
-        background: radial-gradient(circle, rgba(120,130,55,.14), transparent 68%);
-        pointer-events: none;
-    }
-
-    .app-main-logo {
-        position: absolute;
-        left: 24px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 110px;
-        max-height: 82px;
-        object-fit: contain;
-        object-position: center;
-        filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));
-        z-index: 2;
-    }
-
-    .app-main-title-wrap {
-        position: relative;
-        z-index: 1;
-        text-align: center;
-        padding: 0 115px;
-    }
-
-    .app-main-title {
-        margin: 0;
-        color: #ffffff;
-        font-size: clamp(1.55rem, 2.4vw, 2.35rem);
-        font-weight: 800;
-        letter-spacing: .8px;
-        line-height: 1.08;
-        text-shadow: 0 4px 18px rgba(0,0,0,.38);
-    }
-
-    .app-main-subtitle {
-        margin-top: 8px;
-        color: rgba(218,231,231,.82);
-        font-size: .88rem;
-        font-weight: 500;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-    }
-
-    @media (max-width: 700px) {
-        .app-main-header {
-            min-height: 128px;
-            padding: 14px 16px;
-        }
-
-        .app-main-logo {
-            left: 14px;
-            width: 76px;
-            max-height: 64px;
-        }
-
-        .app-main-title-wrap {
-            padding: 0 72px 0 82px;
-        }
-
-        .app-main-title {
-            font-size: 1.35rem;
-        }
-
-        .app-main-subtitle {
-            font-size: .68rem;
-            letter-spacing: .9px;
-        }
-    }
 
     
     /* ==========================================================
@@ -1048,36 +940,17 @@ def formatear_fecha(valor_fecha):
 
 
 # ============================================================
-# ENCABEZADO PRINCIPAL
+# MOSTRAR LOGO
 # ============================================================
 
-logo_html = ""
 if icono_pestana is not None:
-    import base64
+    col_l1, col_l2, col_l3 = st.columns(3)
 
-    try:
-        buffer_logo = io.BytesIO()
-        icono_pestana.save(buffer_logo, format="PNG")
-        logo_b64 = base64.b64encode(buffer_logo.getvalue()).decode("utf-8")
-        logo_html = (
-            f'<img class="app-main-logo" src="data:image/png;base64,{logo_b64}" '
-            f'alt="Logo" />'
+    with col_l2:
+        st.image(
+            icono_pestana,
+            width="stretch"
         )
-    except Exception:
-        logo_html = ""
-
-st.markdown(
-    f"""
-    <div class=\"app-main-header\">
-        {logo_html}
-        <div class=\"app-main-title-wrap\">
-            <div class=\"app-main-title\">PERSONAL TRAINING &amp; EVOLUTION TRACKER</div>
-            <div class=\"app-main-subtitle\">Entrenamiento personalizado · Seguimiento · Evolución</div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 
 # ============================================================
@@ -2365,6 +2238,13 @@ if "autenticado" not in st.session_state:
     st.session_state["rol"] = None
     st.session_state["cedula"] = None
     st.session_state["nombre"] = None
+
+
+# ============================================================
+# TÍTULO
+# ============================================================
+
+st.title("PERSONAL TRAINING & EVOLUTION TRACKER")
 
 
 # ============================================================
