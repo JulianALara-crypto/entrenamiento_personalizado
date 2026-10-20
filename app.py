@@ -2617,7 +2617,7 @@ else:
                         )
                         nombre_pdf = "Informe_Evolucion_" + "".join(ch for ch in st.session_state.get("nombre", "Cliente") if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
                         st.download_button(
-                            "⬇️ Descargar Informe PDF",
+                            "♻️ Descargar Informe PDF",
                             data=pdf_bytes,
                             file_name=nombre_pdf,
                             mime="application/pdf",
@@ -2945,7 +2945,7 @@ else:
                                             )
                                             nombre_admin_pdf = "Informe_Evolucion_" + "".join(ch for ch in str(u_info.get("nombre_completo", "Cliente")) if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
                                             st.download_button(
-                                                "⬇️ Descargar Informe PDF",
+                                                "♻️ Descargar Informe PDF",
                                                 data=pdf_bytes_admin,
                                                 file_name=nombre_admin_pdf,
                                                 mime="application/pdf",
