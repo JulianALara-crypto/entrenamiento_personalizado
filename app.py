@@ -1103,7 +1103,8 @@ def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
 
     st.info(
         "Las cantidades de macronutrientes por comida son aproximadas y no equivalen a gramos de cada alimento. "
-        "Las porciones reales deben ajustarse a preferencias, alergias, salud y entrenamiento. "
+        "Las porciones reales deben ajustarse a preferencias, alergias, salud y entrenamiento; consulta a un profesional "
+        "si necesitas una dieta individualizada."
     )
 
 
