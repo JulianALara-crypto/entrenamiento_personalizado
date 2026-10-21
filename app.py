@@ -1306,7 +1306,7 @@ def cargar_usuarios_login():
 # CARGAR BASE DE DATOS COMPLETA
 # ============================================================
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=20)
 def cargar_bd():
     try:
         respuesta = api_get(
@@ -1353,6 +1353,27 @@ def cargar_bd():
         )
 
         # ====================================================
+        # PLANES
+        # Se aprovecha la misma respuesta completa de la API para
+        # evitar una segunda petición HTTP exclusiva para Planes.
+        # ====================================================
+        planes_raw = res.get("planes", [])
+        df_planes = construir_dataframe(
+            planes_raw,
+            [
+                "cedula",
+                "nombre_completo",
+                "tipo_plan",
+                "fecha_inicio",
+                "fecha_fin",
+                "estado",
+                "observaciones",
+                "clases_incluidas",
+                "id_plan",
+            ],
+        )
+
+        # ====================================================
         # CLASES
         # ====================================================
         clases_raw = res.get("clases", [])
@@ -1364,7 +1385,7 @@ def cargar_bd():
         # ====================================================
         # LIMPIAR CÉDULAS
         # ====================================================
-        for dataframe in (df_u, df_m, df_p, df_c):
+        for dataframe in (df_u, df_m, df_p, df_planes, df_c):
             if not dataframe.empty and "cedula" in dataframe.columns:
                 dataframe["cedula"] = dataframe["cedula"].apply(normalizar_cedula)
 
@@ -1404,8 +1425,13 @@ def cargar_bd():
                 df_p[columna] = pd.to_numeric(df_p[columna], errors="coerce")
 
         # ====================================================
-        # NUMÉRICOS DE CLASES
+        # NUMÉRICOS DE PLANES Y CLASES
         # ====================================================
+        if not df_planes.empty and "clases_incluidas" in df_planes.columns:
+            df_planes["clases_incluidas"] = pd.to_numeric(
+                df_planes["clases_incluidas"], errors="coerce"
+            ).fillna(0)
+
         if not df_c.empty and "periodo" in df_c.columns:
             df_c["periodo"] = pd.to_numeric(df_c["periodo"], errors="coerce")
 
@@ -1421,6 +1447,11 @@ def cargar_bd():
         if not df_p.empty and "fecha_pago" in df_p.columns:
             df_p["fecha_pago"] = df_p["fecha_pago"].apply(formatear_fecha)
 
+        if not df_planes.empty and "fecha_inicio" in df_planes.columns:
+            df_planes["_fecha_inicio_dt"] = df_planes["fecha_inicio"].apply(parsear_fecha)
+        else:
+            df_planes["_fecha_inicio_dt"] = pd.NaT
+
         if not df_c.empty and "fecha_clase" in df_c.columns:
             df_c["fecha_clase"] = df_c["fecha_clase"].apply(formatear_fecha)
 
@@ -1431,12 +1462,14 @@ def cargar_bd():
             df_u,
             df_m,
             df_p,
-            df_c
+            df_c,
+            df_planes,
         )
 
     except Exception as e:
         st.error(f"Error procesando base de datos: {e}")
         return (
+            pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame(),
@@ -1892,64 +1925,21 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
     return buffer.getvalue()
 
 
-@st.cache_data(ttl=10)
 def cargar_solo_planes():
-    """Carga la hoja Planes de la API y la normaliza de forma segura."""
+    """
+    Reutiliza la hoja Planes que ya viene en la respuesta completa de la API.
+    Evita una petición HTTP adicional y comparte la misma caché de cargar_bd.
+    """
     try:
-        respuesta = api_get(
-            URL_API,
-            params={"action": "planes"},
-            timeout=30,
-        )
-        respuesta.raise_for_status()
-        datos = respuesta.json()
-
-        # Algunas versiones del Apps Script devuelven {planes: [...]};
-        # otras pueden devolver directamente una lista.
-        if isinstance(datos, dict):
-            planes_raw = datos.get("planes", [])
-        elif isinstance(datos, list):
-            planes_raw = datos
-        else:
-            planes_raw = []
-
-        df_planes = construir_dataframe(
-            planes_raw,
-            [
-                "cedula",
-                "nombre_completo",
-                "tipo_plan",
-                "fecha_inicio",
-                "fecha_fin",
-                "estado",
-                "observaciones",
-                "clases_incluidas",
-                "id_plan",
-            ],
-        )
-
-        if df_planes.empty:
-            return df_planes
-
-        if "cedula" in df_planes.columns:
-            df_planes["cedula"] = df_planes["cedula"].apply(normalizar_cedula)
-
-        if "clases_incluidas" in df_planes.columns:
-            df_planes["clases_incluidas"] = pd.to_numeric(
-                df_planes["clases_incluidas"], errors="coerce"
-            ).fillna(0)
-
-        if "fecha_inicio" in df_planes.columns:
-            df_planes["_fecha_inicio_dt"] = df_planes["fecha_inicio"].apply(parsear_fecha)
-        else:
-            df_planes["_fecha_inicio_dt"] = pd.NaT
-
-        return df_planes
-
+        datos = cargar_bd()
+        if isinstance(datos, (tuple, list)) and len(datos) >= 5:
+            return datos[4]
+        return pd.DataFrame()
     except Exception:
         # El resumen de clases no debe tumbar toda la aplicación si Planes
         # no responde temporalmente.
         return pd.DataFrame()
+
 
 def obtener_resumen_clases(df_clases, cedula):
     """
@@ -2415,7 +2405,7 @@ else:
         st.session_state["nombre"] = None
         st.rerun()
 
-    df_usuarios, df_historial, df_pagos, df_clases = cargar_bd()
+    df_usuarios, df_historial, df_pagos, df_clases, df_planes_bd = cargar_bd()
 
     # ========================================================
     # CLIENTE
