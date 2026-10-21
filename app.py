@@ -978,6 +978,137 @@ if icono_pestana is not None:
 
 
 # ============================================================
+# ALIMENTACIÓN RECOMENDADA SEGÚN OBJETIVO
+# Utiliza UIcons de Flaticon ya cargados por la aplicación.
+# ============================================================
+
+def calcular_recomendacion_alimentaria(row):
+    """Calcula una guía orientativa desde la última evaluación disponible."""
+    def numero(campos, predeterminado=0.0):
+        for campo in campos:
+            try:
+                valor = float(row.get(campo, 0) or 0)
+                if valor > 0:
+                    return valor
+            except (TypeError, ValueError):
+                continue
+        return float(predeterminado)
+
+    peso = numero(["peso_kg", "peso"], 70.0)
+    calorias = numero(["calorias_objetivo"], 0.0)
+    meta = str(row.get("meta", row.get("objetivo", "Mantenimiento"))).strip().lower()
+
+    if "ganar" in meta or "músc" in meta or "mus" in meta:
+        objetivo, factor_proteina, grasa_pct, color = "Ganar músculo", 1.8, 0.27, "#35d0ba"
+        enfoque = "Prioriza proteína suficiente, carbohidratos para apoyar el entrenamiento y alimentos variados."
+    elif "perder" in meta or "grasa" in meta or "peso" in meta:
+        objetivo, factor_proteina, grasa_pct, color = "Perder peso / grasa", 1.8, 0.28, "#ff7185"
+        enfoque = "Prioriza proteína, verduras, fibra y porciones ajustadas a tu objetivo energético."
+    else:
+        objetivo, factor_proteina, grasa_pct, color = "Mantenimiento", 1.6, 0.30, "#69aefc"
+        enfoque = "Busca una alimentación equilibrada que ayude a mantener tu peso, energía y rendimiento."
+
+    if calorias <= 0:
+        calorias = max(1200.0, peso * 30.0)
+
+    proteina = round(peso * factor_proteina)
+    grasa = round((calorias * grasa_pct) / 9)
+    carbohidratos = max(50, round((calorias - proteina * 4 - grasa * 9) / 4))
+
+    distribucion = [
+        {"nombre": "Desayuno", "icono": "fi-rr-sun", "kcal": 0.25, "p": 0.25, "c": 0.25, "g": 0.22,
+         "alimentos": "Huevos o yogur griego, avena o pan integral y una fruta."},
+        {"nombre": "Almuerzo", "icono": "fi-rr-utensils", "kcal": 0.32, "p": 0.30, "c": 0.35, "g": 0.32,
+         "alimentos": "Pollo, pescado, huevos o legumbres; arroz, papa o pasta; verduras y una porción de grasa saludable."},
+        {"nombre": "Merienda / entrenamiento", "icono": "fi-rr-dumbbell", "kcal": 0.15, "p": 0.18, "c": 0.17, "g": 0.16,
+         "alimentos": "Yogur alto en proteína o una alternativa equivalente, fruta y avena o pan integral según preferencia."},
+        {"nombre": "Cena", "icono": "fi-rr-moon", "kcal": 0.28, "p": 0.27, "c": 0.23, "g": 0.30,
+         "alimentos": "Pescado, pollo, huevos, tofu o legumbres; una porción de papa, arroz u otro cereal y verduras."},
+    ]
+    comidas = []
+    for item in distribucion:
+        comidas.append({
+            **item,
+            "kcal_total": round(calorias * item["kcal"]),
+            "proteina": round(proteina * item["p"]),
+            "carbohidratos": round(carbohidratos * item["c"]),
+            "grasa": round(grasa * item["g"]),
+        })
+
+    return {
+        "objetivo": objetivo, "color": color, "enfoque": enfoque,
+        "calorias": round(calorias), "proteina": proteina,
+        "carbohidratos": carbohidratos, "grasa": grasa, "comidas": comidas,
+    }
+
+
+def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
+    """Muestra macros y ejemplos de comidas del cliente seleccionado."""
+    if row is None or not hasattr(row, "index") or len(row.index) == 0:
+        st.info("Todavía no hay una evaluación disponible para generar la guía alimentaria.")
+        return
+
+    plan = calcular_recomendacion_alimentaria(row)
+    color = plan["color"]
+    st.markdown("---")
+    titulo_ui("Alimentación recomendada", "fi-rr-restaurant", 3, 26)
+    st.caption(
+        "Guía orientativa calculada con el peso, el objetivo y las calorías de la última evaluación. "
+        "No sustituye una valoración individual de nutrición."
+    )
+
+    st.markdown(
+        f"""<div style="background:linear-gradient(135deg,rgba(255,255,255,.085),rgba(255,255,255,.025));
+        border:1px solid {color}77;border-radius:20px;padding:20px;margin:8px 0 16px;
+        box-shadow:0 10px 32px rgba(0,0,0,.20);">
+        <div style="font-size:13px;opacity:.78;">PLAN ORIENTATIVO · {nombre_cliente}</div>
+        <div style="font-size:26px;font-weight:800;color:{color};margin:6px 0;">{plan['objetivo']}</div>
+        <div style="font-size:14px;opacity:.9;">{plan['enfoque']}</div></div>""",
+        unsafe_allow_html=True,
+    )
+
+    columnas = st.columns(4)
+    tarjetas = [
+        ("fi-rr-bolt", "Energía", f"{plan['calorias']:,} kcal/día", "#f6c85f"),
+        ("fi-rr-egg", "Proteína", f"{plan['proteina']} g/día", "#35d0ba"),
+        ("fi-rr-wheat", "Carbohidratos", f"{plan['carbohidratos']} g/día", "#69aefc"),
+        ("fi-rr-apple-whole", "Grasas", f"{plan['grasa']} g/día", "#c49bff"),
+    ]
+    for col, (icono, etiqueta, valor, tono) in zip(columnas, tarjetas):
+        with col:
+            st.markdown(
+                f"""<div style="height:100%;min-height:112px;padding:15px 12px;border-radius:16px;
+                border:1px solid {tono}66;background:rgba(255,255,255,.045);text-align:center;">
+                <div style="font-size:22px;color:{tono};"><i class="fi {icono}"></i></div>
+                <div style="font-size:12px;opacity:.8;margin-top:5px;">{etiqueta}</div>
+                <div style="font-size:19px;font-weight:800;color:{tono};margin-top:4px;">{valor}</div></div>""",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("#### Distribución sugerida por comida")
+    for comida in plan["comidas"]:
+        st.markdown(
+            f"""<div style="background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.025));
+            border:1px solid rgba(255,255,255,.11);border-radius:17px;padding:17px;margin:10px 0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-size:19px;font-weight:800;"><i class="fi {comida['icono']}" style="color:{color};"></i>
+            &nbsp;{comida['nombre']}</div><div style="font-weight:800;color:{color};">≈ {comida['kcal_total']} kcal</div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:13px;">
+            <span style="padding:7px 10px;border-radius:9px;background:rgba(53,208,186,.12);">Proteína: <b>{comida['proteina']} g</b></span>
+            <span style="padding:7px 10px;border-radius:9px;background:rgba(105,174,252,.12);">Carbohidratos: <b>{comida['carbohidratos']} g</b></span>
+            <span style="padding:7px 10px;border-radius:9px;background:rgba(196,155,255,.12);">Grasas: <b>{comida['grasa']} g</b></span></div>
+            <div style="margin-top:12px;font-size:14px;opacity:.9;"><b>Ideas de alimentos:</b> {comida['alimentos']}</div></div>""",
+            unsafe_allow_html=True,
+        )
+
+    st.info(
+        "Las cantidades de macronutrientes por comida son aproximadas y no equivalen a gramos de cada alimento. "
+        "Las porciones reales deben ajustarse a preferencias, alergias, salud y entrenamiento; consulta a un profesional "
+        "si necesitas una dieta individualizada."
+    )
+
+
+# ============================================================
 # CALCULAR MÉTRICAS (CORREGIDO Y AJUSTADO MATEMÁTICAMENTE)
 # ============================================================
 
@@ -2618,6 +2749,11 @@ else:
 
                 mostrar_graficos_evolucion(mis_registros)
 
+                mostrar_alimentacion_recomendada(
+                    mis_registros.iloc[-1],
+                    st.session_state.get("nombre", "Cliente"),
+                )
+
                 st.markdown("---")
                 titulo_ui("Informe de Evolución", "fi-rr-file-user", 3, 24)
                 st.caption("Genera un informe PDF con logo, resumen, comparativa completa y todo el historial antropométrico.")
@@ -2945,7 +3081,19 @@ else:
                             if not df_historial.empty:
                                 h_cliente = df_historial[df_historial["cedula"] == id_cliente].copy()
                                 if not h_cliente.empty:
-                                    mostrar_graficos_evolucion(h_cliente)
+                                    h_cliente["_fecha_nutricion_dt"] = pd.to_datetime(
+                                        h_cliente["fecha_evaluacion"],
+                                        format="%d-%m-%Y",
+                                        errors="coerce",
+                                    )
+                                    h_cliente = h_cliente.sort_values("_fecha_nutricion_dt", na_position="first")
+                                    mostrar_graficos_evolucion(h_cliente.drop(columns=["_fecha_nutricion_dt"], errors="ignore"))
+
+                                    mostrar_alimentacion_recomendada(
+                                        h_cliente.iloc[-1],
+                                        u_info.get("nombre_completo", "Cliente"),
+                                    )
+                                    h_cliente = h_cliente.drop(columns=["_fecha_nutricion_dt"], errors="ignore")
 
                                     titulo_ui("Informe de Evolución del Cliente", "fi-rr-file-user", 3, 24)
                                     st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
