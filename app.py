@@ -1731,8 +1731,8 @@ def _numero_seguro(valor):
         return None
 
 
-def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_cliente, logo_path=None):
-    """Genera un informe PDF profesional con la evolución completa del cliente."""
+def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_cliente, logo_path=None, incluir_alimentacion=False):
+    """Genera un informe PDF de evolución y, opcionalmente, una guía alimentaria basada en la última evaluación."""
     try:
         from io import BytesIO
         from reportlab.lib import colors
@@ -1961,6 +1961,72 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
         ("BOTTOMPADDING", (0,0), (-1,-1), 4),
     ]))
     story.append(ant_table)
+
+    # Guía de alimentación opcional: toma automáticamente el objetivo y datos
+    # de la última evaluación guardada; nunca solicita elegir perder grasa/ganar músculo.
+    if incluir_alimentacion:
+        try:
+            plan_alimentario = calcular_recomendacion_alimentaria(actual)
+            story.append(PageBreak())
+            story.append(Paragraph("GUÍA DE ALIMENTACIÓN ORIENTATIVA", titulo))
+            story.append(Paragraph(
+                "Generada automáticamente con los datos y el objetivo registrados en la última evaluación.",
+                subtitulo,
+            ))
+            story.append(Paragraph(f"Objetivo registrado: {plan_alimentario['objetivo']}", h2))
+            story.append(Paragraph(plan_alimentario["enfoque"], normal))
+            story.append(Spacer(1, 0.18 * cm))
+
+            macros_data = [
+                [Paragraph("Energía diaria", table_header), Paragraph("Proteína", table_header),
+                 Paragraph("Carbohidratos", table_header), Paragraph("Grasas", table_header)],
+                [Paragraph(f"{plan_alimentario['calorias']} kcal", normal),
+                 Paragraph(f"{plan_alimentario['proteina']} g", normal),
+                 Paragraph(f"{plan_alimentario['carbohidratos']} g", normal),
+                 Paragraph(f"{plan_alimentario['grasa']} g", normal)],
+            ]
+            macros_table = Table(macros_data, colWidths=[4.1*cm, 4.1*cm, 4.1*cm, 4.1*cm])
+            macros_table.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#171717")),
+                ("BACKGROUND", (0,1), (-1,1), colors.HexColor("#F3F3F3")),
+                ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#CCCCCC")),
+                ("ALIGN", (0,0), (-1,-1), "CENTER"),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                ("TOPPADDING", (0,0), (-1,-1), 8),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ]))
+            story.append(macros_table)
+            story.append(Spacer(1, 0.35 * cm))
+            story.append(Paragraph("Distribución sugerida por comida", h2))
+
+            for comida in plan_alimentario["comidas"]:
+                comida_data = [
+                    [Paragraph(f"<b>{comida['nombre']}</b> · aproximadamente {comida['kcal_total']} kcal", normal)],
+                    [Paragraph(
+                        f"Proteína: {comida['proteina']} g · Carbohidratos: {comida['carbohidratos']} g · "
+                        f"Grasas: {comida['grasa']} g", small)],
+                    [Paragraph(f"<b>Ideas de alimentos:</b> {comida['alimentos']}", normal)],
+                ]
+                comida_table = Table(comida_data, colWidths=[16.4*cm])
+                comida_table.setStyle(TableStyle([
+                    ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#F7F7F7")),
+                    ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#D5D5D5")),
+                    ("LINEBELOW", (0,0), (-1,0), 0.4, colors.HexColor("#B8B8B8")),
+                    ("LEFTPADDING", (0,0), (-1,-1), 8),
+                    ("RIGHTPADDING", (0,0), (-1,-1), 8),
+                    ("TOPPADDING", (0,0), (-1,-1), 5),
+                    ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                ]))
+                story.append(KeepTogether([comida_table, Spacer(1, 0.18*cm)]))
+
+            story.append(Spacer(1, 0.15*cm))
+            story.append(Paragraph(
+                "Importante: esta guía es orientativa. Los macronutrientes por comida son aproximados y no equivalen "
+                "a gramos de cada alimento. Ajusta las porciones a preferencias, alergias y necesidades personales; "
+                "no sustituye una valoración individual de nutrición.", note
+            ))
+        except Exception as exc:
+            raise ValueError(f"No se pudo generar la guía alimentaria con los datos guardados: {exc}")
 
     # Historial completo de evaluaciones
     story.append(PageBreak())
@@ -2757,6 +2823,12 @@ else:
                 st.markdown("---")
                 titulo_ui("Informe de Evolución", "fi-rr-file-user", 3, 24)
                 st.caption("Genera un informe PDF con logo, resumen, comparativa completa y todo el historial antropométrico.")
+                incluir_alimentacion_cliente = st.checkbox(
+                    "Incluir guía de alimentación en el PDF",
+                    value=False,
+                    key="incluir_alimentacion_pdf_cliente",
+                    help="La guía usa automáticamente el objetivo y los datos de la última evaluación del perfil.",
+                )
                 if st.button("Generar Informe de Evolución en PDF", use_container_width=True, key="btn_pdf_cliente"):
                     try:
                         pdf_bytes = generar_informe_evolucion_pdf(
@@ -2764,6 +2836,7 @@ else:
                             st.session_state.get("nombre", "Cliente"),
                             user_id,
                             ruta_logo,
+                            incluir_alimentacion=incluir_alimentacion_cliente,
                         )
                         nombre_pdf = "Informe_Evolucion_" + "".join(ch for ch in st.session_state.get("nombre", "Cliente") if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
                         st.download_button(
@@ -3097,6 +3170,12 @@ else:
 
                                     titulo_ui("Informe de Evolución del Cliente", "fi-rr-file-user", 3, 24)
                                     st.caption("Incluye logo, indicadores, medidas de brazos, pecho, cintura, glúteos/cadera, piernas y gemelos, además del historial.")
+                                    incluir_alimentacion_admin = st.checkbox(
+                                        "Incluir guía de alimentación en el PDF",
+                                        value=False,
+                                        key=f"incluir_alimentacion_pdf_admin_{id_cliente}",
+                                        help="La guía toma automáticamente el objetivo y los datos de la última evaluación del cliente.",
+                                    )
                                     if st.button("Generar Informe PDF del Cliente", use_container_width=True, key=f"btn_pdf_admin_{id_cliente}"):
                                         try:
                                             pdf_bytes_admin = generar_informe_evolucion_pdf(
@@ -3104,6 +3183,7 @@ else:
                                                 u_info.get("nombre_completo", "Cliente"),
                                                 id_cliente,
                                                 ruta_logo,
+                                                incluir_alimentacion=incluir_alimentacion_admin,
                                             )
                                             nombre_admin_pdf = "Informe_Evolucion_" + "".join(ch for ch in str(u_info.get("nombre_completo", "Cliente")) if ch.isalnum() or ch in " _-").strip().replace(" ", "_") + ".pdf"
                                             st.download_button(
