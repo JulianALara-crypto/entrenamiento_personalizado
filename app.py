@@ -17,6 +17,30 @@ URL_API = ("https://script.google.com/macros/s/AKfycbzEqkRmWqqSKuK_ILnRMdTbnj8cU
 
 
 # ============================================================
+# SESIÓN HTTP REUTILIZABLE
+# Evita crear una conexión HTTP nueva en cada operación.
+# ============================================================
+API_SESSION = requests.Session()
+
+def api_get(*args, **kwargs):
+    return API_SESSION.get(*args, **kwargs)
+
+def api_post(*args, **kwargs):
+    return API_SESSION.post(*args, **kwargs)
+
+def invalidar_cache_datos():
+    """Invalida únicamente los cachés de datos de la aplicación."""
+    try:
+        cargar_usuarios_login.clear()
+    except Exception:
+        pass
+    try:
+        cargar_bd.clear()
+    except Exception:
+        pass
+
+
+# ============================================================
 # RUTA SEGURA DEL LOGO
 # ============================================================
 
@@ -1229,7 +1253,7 @@ def cargar_usuarios_login():
     error = None si la consulta fue exitosa.
     """
     try:
-        respuesta = requests.get(
+        respuesta = api_get(
             URL_API,
             params={"action": "usuarios"},
             timeout=15,
@@ -1285,7 +1309,7 @@ def cargar_usuarios_login():
 @st.cache_data(ttl=10)
 def cargar_bd():
     try:
-        respuesta = requests.get(
+        respuesta = api_get(
             URL_API,
             timeout=30
         )
@@ -1872,7 +1896,7 @@ def generar_informe_evolucion_pdf(df_historial_cliente, nombre_cliente, cedula_c
 def cargar_solo_planes():
     """Carga la hoja Planes de la API y la normaliza de forma segura."""
     try:
-        respuesta = requests.get(
+        respuesta = api_get(
             URL_API,
             params={"action": "planes"},
             timeout=30,
@@ -2343,7 +2367,7 @@ if not st.session_state["autenticado"]:
                     }
 
                     try:
-                        respuesta_registro = requests.post(
+                        respuesta_registro = api_post(
                             URL_API,
                             json=datos_usuario,
                             timeout=30,
@@ -2366,7 +2390,7 @@ if not st.session_state["autenticado"]:
                                 )
                             )
                         else:
-                            st.cache_data.clear()
+                            invalidar_cache_datos()
                             st.success(
                                 "✅ Perfil creado correctamente. "
                                 "Ya puedes iniciar sesión con tu cédula y contraseña."
@@ -2520,7 +2544,7 @@ else:
                             "edad_metabolica": int(edad_bio),
                         }
 
-                        respuesta_medidas = requests.post(
+                        respuesta_medidas = api_post(
                             URL_API,
                             json=datos_medidas,
                             timeout=30,
@@ -2539,7 +2563,7 @@ else:
                             )
                             st.stop()
 
-                        st.cache_data.clear()
+                        invalidar_cache_datos()
                         st.success("¡Medidas guardadas con éxito!")
 
                         r1, r2, r3, r4 = st.columns(4)
@@ -2854,7 +2878,7 @@ else:
                                                 float(valor_mensualidad),
                                             ]
 
-                                            respuesta_pago = requests.post(
+                                            respuesta_pago = api_post(
                                                 URL_API,
                                                 json={
                                                     "action": "guardar_pago",
@@ -2881,7 +2905,7 @@ else:
                                                 )
                                                 st.stop()
 
-                                            st.cache_data.clear()
+                                            invalidar_cache_datos()
                                             st.success("✅ Pago registrado correctamente.")
                                             st.rerun()
                                         except Exception as e:
@@ -3053,7 +3077,7 @@ else:
                                     int(clases_contratadas),
                                 ]
 
-                                respuesta_config = requests.post(
+                                respuesta_config = api_post(
                                     URL_API,
                                     json={
                                         "action": "guardar_plan",
@@ -3083,7 +3107,7 @@ else:
                                     )
                                     st.stop()
 
-                                st.cache_data.clear()
+                                invalidar_cache_datos()
                                 st.success(
                                     "✅ Nuevo plan registrado correctamente."
                                 )
@@ -3164,7 +3188,7 @@ else:
                                     "Tomada",
                                 ]
 
-                                respuesta_clase = requests.post(
+                                respuesta_clase = api_post(
                                     URL_API,
                                     json={
                                         "action": "guardar_clase",
@@ -3188,7 +3212,7 @@ else:
                                     )
                                     st.stop()
 
-                                st.cache_data.clear()
+                                invalidar_cache_datos()
                                 st.success("✅ Clase registrada correctamente.")
                                 st.rerun()
 
