@@ -3,7 +3,8 @@ import os
 import urllib.parse
 from datetime import datetime, date
 
-import pandas as pdimport requests
+import pandas as pd
+import requests
 import streamlit as st
 from PIL import Image
 
