@@ -3,8 +3,7 @@ import os
 import urllib.parse
 from datetime import datetime, date
 
-import pandas as pd
-import requests
+import pandas as pdimport requests
 import streamlit as st
 from PIL import Image
 
@@ -1613,70 +1612,38 @@ def cargar_bd():
 # ============================================================
 
 def mostrar_resumen_metricas_evolucion(df_filtrado):
-    """Muestra siempre las 4 métricas principales de evolución.
-
-    El valor grande corresponde a la evaluación más reciente y el delta,
-    cuando existe una evaluación anterior, corresponde al cambio desde el
-    primer registro hasta el actual.
-    """
+    """Muestra de forma persistente los resultados de la última evaluación."""
     if df_filtrado is None or df_filtrado.empty:
         return
 
     datos = df_filtrado.copy()
+    if "fecha_evaluacion" in datos.columns:
+        datos["_fecha_evolucion"] = datos["fecha_evaluacion"].apply(parsear_fecha)
+        datos = datos.sort_values("_fecha_evolucion", na_position="first")
+    actual = datos.iloc[-1]
 
-    def numero(row, columnas, default=0.0):
+    def numero(columnas, default=0.0):
         for columna in columnas:
-            if columna in row.index:
+            if columna in actual.index:
                 try:
-                    valor = float(row[columna])
+                    valor = float(actual[columna])
                     if pd.notna(valor):
                         return valor
                 except (TypeError, ValueError):
-                    pass
+                    continue
         return float(default)
 
-    # La función de gráficas ya ordena cronológicamente; aun así ordenamos
-    # aquí para que las tarjetas sean correctas independientemente del origen.
-    if "fecha_evaluacion" in datos.columns:
-        datos["_fecha_evolucion"] = datos["fecha_evaluacion"].apply(parsear_fecha)
-        datos = datos.sort_values("_fecha_evolucion", na_position="last")
+    imc = numero(["imc"])
+    grasa = numero(["porcentaje_grasa", "grasa"])
+    calorias = numero(["calorias_objetivo"])
+    edad_metabolica = numero(["edad_metabolica"])
 
-    inicial = datos.iloc[0]
-    actual = datos.iloc[-1]
-
-    peso_i = numero(inicial, ["peso_kg", "peso"])
-    peso_a = numero(actual, ["peso_kg", "peso"])
-    grasa_i = numero(inicial, ["porcentaje_grasa", "grasa"])
-    grasa_a = numero(actual, ["porcentaje_grasa", "grasa"])
-    cintura_i = numero(inicial, ["cintura_cm", "cintura"])
-    cintura_a = numero(actual, ["cintura_cm", "cintura"])
-    pecho_i = numero(inicial, ["pecho_cm", "pecho"])
-    pecho_a = numero(actual, ["pecho_cm", "pecho"])
-
-    titulo_ui("Resumen de Evolución Física", "fi-rr-chart-line-up", 3, 24)
-    st.caption("Estas métricas permanecen visibles con la última evaluación registrada y muestran el cambio desde tu primer registro.")
-
+    titulo_ui("Resultados de tu última evaluación", "fi-rr-chart-line-up", 3, 24)
     c1, c2, c3, c4 = st.columns(4)
-
-    def delta(actual_val, inicial_val):
-        if len(datos) < 2:
-            return None
-        return f"{actual_val - inicial_val:+.1f}"
-
-    with c1:
-        st.metric("⚖️ Peso", f"{peso_a:.1f} kg", delta(peso_a, peso_i), delta_color="inverse")
-    with c2:
-        st.metric("🔥 % Grasa", f"{grasa_a:.2f}%", delta(grasa_a, grasa_i), delta_color="inverse")
-    with c3:
-        st.metric("📏 Cintura", f"{cintura_a:.1f} cm", delta(cintura_a, cintura_i), delta_color="inverse")
-    with c4:
-        st.metric("💪 Pecho", f"{pecho_a:.1f} cm", delta(pecho_a, pecho_i), delta_color="normal")
-
-    if len(datos) >= 2:
-        st.caption("Δ = cambio desde la primera evaluación hasta la evaluación más reciente. En pecho, un valor positivo representa aumento del perímetro.")
-    else:
-        st.caption("El cambio aparecerá automáticamente cuando exista una segunda evaluación física.")
-
+    c1.metric("IMC", f"{imc:.2f}")
+    c2.metric("% Grasa Estimada", f"{grasa:.2f}%")
+    c3.metric("Calorías Recomendadas", f"{calorias:,.0f} kcal".replace(",", "."))
+    c4.metric("Edad Metabólica", f"{edad_metabolica:.0f} años")
 
 
 def mostrar_resumen_evolucion_actual(row):
@@ -2877,9 +2844,6 @@ else:
                     errors="coerce",
                 )
                 mis_registros = mis_registros.sort_values(by="_fecha_dt").drop(columns=["_fecha_dt"])
-
-                actual = mis_registros.iloc[-1]
-                mostrar_resumen_evolucion_actual(actual)
 
                 mostrar_graficos_evolucion(mis_registros)
 
