@@ -3143,7 +3143,7 @@ else:
                                     valor_mensualidad_actual = float(mensualidades_validas.iloc[-1])
 
                             if valor_mensualidad_actual <= 0:
-                                valor_mensualidad_actual = 250000.0
+                                valor_mensualidad_actual = 400000.0
 
                             total_pagado = 0.0
                             if not pagos_mes_actual.empty and "valor" in pagos_mes_actual.columns:
