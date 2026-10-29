@@ -1,5 +1,6 @@
 import math
 import os
+import json
 import urllib.parse
 from datetime import datetime, date
 
@@ -2516,6 +2517,128 @@ if "autenticado" not in st.session_state:
 
 
 # ============================================================
+# TARIFARIO DEL ADMINISTRADOR
+# ============================================================
+
+ARCHIVO_TARIFARIO = os.path.join(BASE_DIR, "tarifario_personal_training.json")
+
+TARIFAS_INICIALES = [
+    {"Modalidad": "Individual", "Plan": "1 clase", "Sesiones": 1, "Precio COP": 33000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Sesión individual"},
+    {"Modalidad": "Individual", "Plan": "Paquete 4 clases", "Sesiones": 4, "Precio COP": 130000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 4 sesiones"},
+    {"Modalidad": "Individual", "Plan": "Paquete 8 clases", "Sesiones": 8, "Precio COP": 260000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 8 sesiones"},
+    {"Modalidad": "Individual", "Plan": "Paquete 12 clases", "Sesiones": 12, "Precio COP": 400000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 12 sesiones"},
+    {"Modalidad": "Individual", "Plan": "Paquete 20 clases", "Sesiones": 20, "Precio COP": 520000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 20 sesiones"},
+    {"Modalidad": "Individual", "Plan": "Paquete 30 clases", "Sesiones": 30, "Precio COP": 750000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 30 sesiones"},
+    {"Modalidad": "Pareja", "Plan": "Pareja 12 clases", "Sesiones": 12, "Precio COP": 650000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Precio total por pareja"},
+    {"Modalidad": "Pareja", "Plan": "Pareja 20 clases", "Sesiones": 20, "Precio COP": 1000000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Precio total por pareja"},
+    {"Modalidad": "Individual", "Plan": "Mensualidad personalizada", "Sesiones": 0, "Precio COP": 0, "Frecuencia semanal": "Variable", "Estado": "Por definir", "Observaciones": "Precio y sesiones mensuales por definir"},
+    {"Modalidad": "Pareja", "Plan": "Mensualidad para pareja", "Sesiones": 0, "Precio COP": 0, "Frecuencia semanal": "Variable", "Estado": "Por definir", "Observaciones": "Precio y sesiones mensuales por definir"},
+]
+
+
+def cargar_tarifario_local():
+    """Lee las tarifas del archivo de configuración; si no existe, usa la tabla inicial."""
+    try:
+        if os.path.isfile(ARCHIVO_TARIFARIO):
+            with open(ARCHIVO_TARIFARIO, "r", encoding="utf-8") as archivo:
+                datos = json.load(archivo)
+            if isinstance(datos, list) and datos:
+                return pd.DataFrame(datos)
+    except Exception:
+        pass
+    return pd.DataFrame(TARIFAS_INICIALES)
+
+
+def guardar_tarifario_local(df_tarifas):
+    """Guarda la tabla de tarifas en JSON sin tocar planes ni pagos de clientes."""
+    columnas = ["Modalidad", "Plan", "Sesiones", "Precio COP", "Frecuencia semanal", "Estado", "Observaciones"]
+    datos = df_tarifas.copy()
+    for columna in columnas:
+        if columna not in datos.columns:
+            datos[columna] = ""
+    datos = datos[columnas].fillna("")
+    datos["Sesiones"] = pd.to_numeric(datos["Sesiones"], errors="coerce").fillna(0).astype(int)
+    datos["Precio COP"] = pd.to_numeric(datos["Precio COP"], errors="coerce").fillna(0).clip(lower=0).round(0).astype(int)
+    with open(ARCHIVO_TARIFARIO, "w", encoding="utf-8") as archivo:
+        json.dump(datos.to_dict(orient="records"), archivo, ensure_ascii=False, indent=2)
+
+
+def mostrar_modulo_tarifario():
+    st.markdown("## 💰 Tarifario y planes")
+    st.caption("Módulo privado del administrador. Edita los planes y sus precios sin modificar los pagos ni las contrataciones ya registradas.")
+    df_tarifas = cargar_tarifario_local()
+
+    # Garantiza que nuevas columnas existan si el archivo fue creado con una versión anterior.
+    columnas = ["Modalidad", "Plan", "Sesiones", "Precio COP", "Frecuencia semanal", "Estado", "Observaciones"]
+    for columna in columnas:
+        if columna not in df_tarifas.columns:
+            df_tarifas[columna] = ""
+    df_tarifas = df_tarifas[columnas]
+
+    if "Precio COP" in df_tarifas:
+        total_activos = int((df_tarifas["Estado"].astype(str).str.lower() == "activo").sum())
+        precios_definidos = pd.to_numeric(df_tarifas["Precio COP"], errors="coerce").fillna(0)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Planes configurados", len(df_tarifas))
+        c2.metric("Planes activos", total_activos)
+        c3.metric("Tarifas con precio", int((precios_definidos > 0).sum()))
+
+    st.info("Las mensualidades individual y de pareja quedan creadas como 'Por definir'. Puedes completarlas cuando decidas el precio y las sesiones incluidas.")
+    editado = st.data_editor(
+        df_tarifas,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        column_config={
+            "Modalidad": st.column_config.SelectboxColumn("Modalidad", options=["Individual", "Pareja", "Grupo"], required=True),
+            "Plan": st.column_config.TextColumn("Nombre del plan", required=True),
+            "Sesiones": st.column_config.NumberColumn("Sesiones incluidas", min_value=0, step=1, format="%d"),
+            "Precio COP": st.column_config.NumberColumn("Precio total (COP)", min_value=0, step=1000, format="$ %d"),
+            "Frecuencia semanal": st.column_config.SelectboxColumn("Frecuencia semanal", options=["Variable", "1 día/semana", "2 días/semana", "3 días/semana", "4 días/semana", "5 días/semana"], required=True),
+            "Estado": st.column_config.SelectboxColumn("Estado", options=["Activo", "Inactivo", "Por definir"], required=True),
+            "Observaciones": st.column_config.TextColumn("Condiciones / observaciones"),
+        },
+        key="editor_tarifario_admin",
+    )
+
+    vista = editado.copy()
+    vista["Sesiones"] = pd.to_numeric(vista["Sesiones"], errors="coerce").fillna(0)
+    vista["Precio COP"] = pd.to_numeric(vista["Precio COP"], errors="coerce").fillna(0)
+    vista["Valor por sesión (COP)"] = vista.apply(
+        lambda fila: round(float(fila["Precio COP"]) / float(fila["Sesiones"])) if float(fila["Sesiones"]) > 0 else 0,
+        axis=1,
+    )
+    st.markdown("### Vista previa para cotizar")
+    vista_activa = vista[vista["Estado"].astype(str).str.lower() == "activo"].copy()
+    if not vista_activa.empty:
+        vista_activa["Precio total"] = vista_activa["Precio COP"].map(lambda v: "$" + f"{int(v):,}".replace(",", "."))
+        vista_activa["Valor por sesión"] = vista_activa["Valor por sesión (COP)"].map(lambda v: "$" + f"{int(v):,}".replace(",", ".") if v else "Por definir")
+        st.dataframe(vista_activa[["Modalidad", "Plan", "Sesiones", "Precio total", "Valor por sesión", "Frecuencia semanal"]], use_container_width=True, hide_index=True)
+    else:
+        st.warning("No hay planes activos para mostrar en la vista de cotización.")
+
+    col_guardar, col_descargar = st.columns(2)
+    with col_guardar:
+        if st.button("💾 Guardar cambios del tarifario", type="primary", use_container_width=True):
+            try:
+                if (editado["Plan"].astype(str).str.strip() == "").any():
+                    st.error("Todos los planes deben tener un nombre.")
+                elif (pd.to_numeric(editado["Precio COP"], errors="coerce").fillna(0) < 0).any():
+                    st.error("Los precios no pueden ser negativos.")
+                else:
+                    guardar_tarifario_local(editado)
+                    st.success("Tarifario guardado correctamente.")
+                    st.rerun()
+            except Exception as exc:
+                st.error(f"No fue posible guardar el tarifario: {exc}")
+    with col_descargar:
+        csv = editado.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("⬇️ Descargar tarifario CSV", data=csv, file_name="tarifario_entrenamiento.csv", mime="text/csv", use_container_width=True)
+
+    st.caption("Nota técnica: esta versión guarda los cambios en un archivo JSON junto a la aplicación. En Streamlit Cloud, el archivo local puede reiniciarse al volver a desplegar o reiniciar el servicio; para persistencia garantizada conviene conectar el tarifario a Google Sheets mediante una acción específica del Apps Script.")
+
+
+# ============================================================
 # TÍTULO
 # ============================================================
 
@@ -2944,11 +3067,16 @@ else:
                         "Dashboard General",
                         "Gestión de Clientes",
                         "Control de Clases",
+                        "Tarifario y Planes",
                     ],
                 )
 
+                # TARIFARIO PRIVADO DEL ADMINISTRADOR
+                if opcion_admin == "Tarifario y Planes":
+                    mostrar_modulo_tarifario()
+
                 # DASHBOARD GENERAL
-                if opcion_admin == "Dashboard General":
+                elif opcion_admin == "Dashboard General":
                     mostrar_dashboard_admin(df_usuarios, df_historial, df_pagos, df_clases)
 
                 # GESTIÓN DE CLIENTES
