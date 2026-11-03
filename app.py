@@ -999,12 +999,21 @@ def calcular_recomendacion_alimentaria(row):
     calorias = numero(["calorias_objetivo"], 0.0)
     meta = str(row.get("meta", row.get("objetivo", "Mantenimiento"))).strip().lower()
 
-    if "ganar" in meta or "músc" in meta or "mus" in meta:
+    if "recompos" in meta:
+        objetivo, factor_proteina, grasa_pct, color = "Recomposición corporal", 2.0, 0.28, "#b69cff"
+        enfoque = (
+            "Busca reducir gradualmente el porcentaje de grasa mientras conservas o desarrollas músculo. "
+            "Se usa como referencia el mantenimiento energético, proteína suficiente y entrenamiento de fuerza."
+        )
+    elif "ganar" in meta or "músc" in meta or "mus" in meta:
         objetivo, factor_proteina, grasa_pct, color = "Ganar músculo", 1.8, 0.27, "#35d0ba"
-        enfoque = "Prioriza proteína suficiente, carbohidratos para apoyar el entrenamiento y alimentos variados."
-    elif "perder" in meta or "grasa" in meta or "peso" in meta:
-        objetivo, factor_proteina, grasa_pct, color = "Perder peso / grasa", 1.8, 0.28, "#ff7185"
-        enfoque = "Prioriza proteína, verduras, fibra y porciones ajustadas a tu objetivo energético."
+        enfoque = "Prioriza proteína suficiente y energía para apoyar el entrenamiento y el desarrollo muscular."
+    elif "perder" in meta or "grasa" in meta or "peso" in meta or "déficit" in meta or "deficit" in meta:
+        objetivo, factor_proteina, grasa_pct, color = "Perder peso / Déficit calórico", 1.8, 0.28, "#ff7185"
+        enfoque = (
+            "Déficit calórico moderado como punto de partida, con proteína suficiente, verduras y fibra "
+            "para favorecer la pérdida gradual de grasa y ayudar a conservar músculo."
+        )
     else:
         objetivo, factor_proteina, grasa_pct, color = "Mantenimiento", 1.6, 0.30, "#69aefc"
         enfoque = "Busca una alimentación equilibrada que ayude a mantener tu peso, energía y rendimiento."
@@ -1212,11 +1221,21 @@ def calcular_metricas(
     # ============================================================
     mantenimiento = tmb * 1.375
 
-    if meta == "Perder Grasa":
+    meta_normalizada = str(meta).strip().lower()
+    if (
+        "perder" in meta_normalizada
+        or "grasa" in meta_normalizada
+        or "peso" in meta_normalizada
+        or "déficit" in meta_normalizada
+        or "deficit" in meta_normalizada
+    ):
+        # Déficit moderado de referencia. Se conserva la lógica histórica
+        # para los registros antiguos guardados como "Perder Grasa".
         calorias = mantenimiento - 400
-    elif meta == "Ganar Músculo":
+    elif "ganar" in meta_normalizada or "músc" in meta_normalizada or "mus" in meta_normalizada:
         calorias = mantenimiento + 350
     else:
+        # Mantenimiento y recomposición corporal.
         calorias = mantenimiento
 
     calorias = max(800, calorias)
@@ -2822,7 +2841,16 @@ else:
                 sexo = c1.selectbox("Sexo Fisiológico:", ["Masculino", "Femenino"])
                 meta = c2.selectbox(
                     "Objetivo Principal:",
-                    ["Perder Grasa", "Ganar Músculo", "Mantenimiento"],
+                    [
+                        "Perder peso / Déficit calórico",
+                        "Recomposición corporal",
+                        "Ganar Músculo",
+                        "Mantenimiento",
+                    ],
+                    help=(
+                        "El déficit calórico usa una reducción moderada de referencia de 400 kcal/día; "
+                        "la recomposición toma como referencia las calorías de mantenimiento."
+                    ),
                 )
 
                 st.markdown("---")
