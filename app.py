@@ -1,6 +1,8 @@
 import math
 import os
 import json
+import io
+import zipfile
 import urllib.parse
 from datetime import datetime, date
 
@@ -1052,41 +1054,8 @@ def calcular_recomendacion_alimentaria(row):
     }
 
 
-def obtener_imagen_objetivo(meta):
-    """Devuelve la ruta de la guía visual correspondiente al objetivo guardado."""
-    texto = str(meta or "").strip().lower()
-
-    # Recomposición debe evaluarse antes que las coincidencias generales.
-    if "recompos" in texto:
-        archivo = "03_recomposicion_corporal.png"
-    elif "ganar" in texto or "músc" in texto or "mus" in texto:
-        archivo = "02_ganar_musculo.png"
-    elif any(palabra in texto for palabra in ("perder", "déficit", "deficit", "peso", "grasa")):
-        archivo = "01_perder_peso_deficit_calorico.png"
-    elif "mant" in texto:
-        archivo = "04_mantenimiento.png"
-    else:
-        return None
-
-    carpeta_assets = os.path.join(BASE_DIR, "assets")
-    ruta = os.path.join(carpeta_assets, archivo)
-    return ruta if os.path.isfile(ruta) else None
-
-
-def mostrar_imagen_objetivo(meta):
-    """Muestra la imagen local del objetivo sin depender de servicios externos."""
-    ruta = obtener_imagen_objetivo(meta)
-    if ruta:
-        st.image(ruta, use_container_width=True)
-    else:
-        st.caption(
-            "La guía visual de este objetivo no está disponible. "
-            "Verifica que la carpeta assets esté junto a app.py."
-        )
-
-
 def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
-    """Muestra macros, guía visual y ejemplos de comidas del cliente seleccionado."""
+    """Muestra macros y ejemplos de comidas del cliente seleccionado."""
     if row is None or not hasattr(row, "index") or len(row.index) == 0:
         st.info("Todavía no hay una evaluación disponible para generar la guía alimentaria.")
         return
@@ -1109,9 +1078,6 @@ def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
         <div style="font-size:14px;opacity:.9;">{plan['enfoque']}</div></div>""",
         unsafe_allow_html=True,
     )
-
-    # La imagen se selecciona automáticamente con el objetivo de esta evaluación.
-    mostrar_imagen_objetivo(plan["objetivo"])
 
     columnas = st.columns(4)
     tarjetas = [
@@ -1152,6 +1118,230 @@ def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
         "Las porciones reales deben ajustarse a preferencias, alergias, salud y entrenamiento; consulta a un profesional "
         "si necesitas una dieta individualizada."
     )
+
+
+# ============================================================
+# EVOLUCIÓN INTELIGENTE: TRES INFOGRAFÍAS DINÁMICAS
+# Las imágenes se dibujan con PIL usando los datos reales guardados.
+# No se envían datos personales a servicios externos ni se inventan
+# cantidades nutricionales. Los macros por comida son estimaciones.
+# ============================================================
+
+def _valor_fila(row, claves, defecto=0.0):
+    for clave in claves:
+        try:
+            valor = row.get(clave, None)
+            if valor is not None and str(valor).strip() not in ("", "nan", "None"):
+                return float(valor)
+        except (TypeError, ValueError):
+            pass
+    return float(defecto)
+
+
+def _texto_fila(row, claves, defecto=""):
+    for clave in claves:
+        try:
+            valor = row.get(clave, None)
+            if valor is not None and str(valor).strip() not in ("", "nan", "None"):
+                return str(valor).strip()
+        except Exception:
+            pass
+    return defecto
+
+
+def _fuente_imagen(tamano, negrita=False):
+    rutas = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if negrita else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:/Windows/Fonts/arialbd.ttf" if negrita else "C:/Windows/Fonts/arial.ttf",
+        "DejaVuSans-Bold.ttf" if negrita else "DejaVuSans.ttf",
+    ]
+    for ruta in rutas:
+        try:
+            return ImageFont.truetype(ruta, tamano)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _crear_lienzo(titulo, subtitulo, acento):
+    ancho, alto = 900, 1200
+    imagen = Image.new("RGB", (ancho, alto), (7, 13, 25))
+    px = imagen.load()
+    for y in range(alto):
+        t = y / max(1, alto - 1)
+        color = (int(8 + 5*t), int(17 + 12*t), int(31 + 20*t))
+        for x in range(ancho):
+            px[x, y] = color
+    d = ImageDraw.Draw(imagen)
+    d.rounded_rectangle((28, 28, ancho-28, alto-28), radius=34, outline=(48, 75, 100), width=3)
+    d.rounded_rectangle((55, 55, ancho-55, 205), radius=26, fill=(14, 29, 47), outline=acento, width=2)
+    d.text((82, 82), "PERSONAL TRAINING", font=_fuente_imagen(25, True), fill=(139, 220, 229))
+    d.text((82, 120), titulo, font=_fuente_imagen(42, True), fill=(248, 250, 252))
+    d.text((84, 174), subtitulo[:55], font=_fuente_imagen(19), fill=(183, 199, 216))
+    return imagen, d
+
+
+def _tarjeta(d, caja, titulo, valor, detalle="", acento=(48, 190, 190)):
+    x1, y1, x2, y2 = caja
+    d.rounded_rectangle(caja, radius=22, fill=(17, 34, 53), outline=acento, width=2)
+    d.text((x1+22, y1+18), titulo.upper(), font=_fuente_imagen(17, True), fill=(170, 190, 210))
+    d.text((x1+22, y1+54), str(valor), font=_fuente_imagen(35, True), fill=(245, 250, 255))
+    if detalle:
+        d.text((x1+22, y2-39), str(detalle)[:36], font=_fuente_imagen(15), fill=acento)
+
+
+def _texto_ajustado(d, xy, texto, fuente, color, max_ancho, max_lineas=2, separacion=5):
+    x, y = xy
+    palabras = str(texto).split()
+    lineas, actual = [], ""
+    for palabra in palabras:
+        prueba = (actual + " " + palabra).strip()
+        if d.textbbox((0, 0), prueba, font=fuente)[2] <= max_ancho:
+            actual = prueba
+        else:
+            if actual:
+                lineas.append(actual)
+            actual = palabra
+    if actual:
+        lineas.append(actual)
+    for linea in lineas[:max_lineas]:
+        d.text((x, y), linea, font=fuente, fill=color)
+        y += fuente.size + separacion
+    return y
+
+
+def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
+    """Retorna tres PNG basados en la evaluación actual y, si existe, la anterior."""
+    plan = calcular_recomendacion_alimentaria(row)
+    peso = _valor_fila(row, ["peso_kg", "peso"])
+    estatura = _valor_fila(row, ["estatura_cm", "estatura"])
+    imc = _valor_fila(row, ["imc"])
+    grasa = _valor_fila(row, ["porcentaje_grasa", "grasa"])
+    edad_meta = _valor_fila(row, ["edad_metabolica"])
+    edad = _valor_fila(row, ["edad"])
+    cintura = _valor_fila(row, ["cintura_cm", "cintura"])
+    pecho = _valor_fila(row, ["pecho_cm", "pecho"])
+    cadera = _valor_fila(row, ["cadera_cm", "cadera"])
+    meta = _texto_fila(row, ["meta", "objetivo"], plan["objetivo"])
+    sexo = _texto_fila(row, ["sexo"], "")
+    fecha = _texto_fila(row, ["fecha_evaluacion"], datetime.today().strftime("%d-%m-%Y"))
+    acento = (48, 205, 190) if "ganar" in meta.lower() or "recompos" in meta.lower() else (92, 166, 255)
+
+    # 1. Evolución física
+    img1, d1 = _crear_lienzo("EVOLUCIÓN FÍSICA", f"{nombre_cliente} · {fecha}", acento)
+    # Silueta humana vectorial ilustrativa, no representa una predicción anatómica.
+    cx, top = 450, 270
+    d1.ellipse((cx-48, top, cx+48, top+96), fill=(80, 130, 160), outline=(125, 205, 215), width=3)
+    d1.rounded_rectangle((cx-82, top+105, cx+82, top+365), radius=58, fill=(45, 92, 122), outline=(100, 190, 205), width=3)
+    d1.line((cx-65, top+145, cx-150, top+310), fill=(80, 160, 185), width=34)
+    d1.line((cx+65, top+145, cx+150, top+310), fill=(80, 160, 185), width=34)
+    d1.line((cx-38, top+350, cx-65, top+535), fill=(80, 160, 185), width=42)
+    d1.line((cx+38, top+350, cx+65, top+535), fill=(80, 160, 185), width=42)
+    d1.text((95, 820), "INDICADORES ACTUALES", font=_fuente_imagen(21, True), fill=(150, 215, 225))
+    vals = [
+        ("Peso", f"{peso:.1f} kg" if peso else "Sin dato"),
+        ("IMC", f"{imc:.2f}" if imc else "Sin dato"),
+        ("Grasa estimada", f"{grasa:.1f}%" if grasa else "Sin dato"),
+        ("Cintura", f"{cintura:.1f} cm" if cintura else "Sin dato"),
+        ("Pecho", f"{pecho:.1f} cm" if pecho else "Sin dato"),
+        ("Edad metabólica", f"{edad_meta:.0f} años" if edad_meta else "Sin dato"),
+    ]
+    for i, (lab, val) in enumerate(vals):
+        col, fila = i % 2, i // 2
+        x = 75 + col*385
+        y = 865 + fila*91
+        d1.rounded_rectangle((x, y, x+350, y+72), radius=15, fill=(17, 35, 54), outline=(53, 91, 116), width=2)
+        d1.text((x+16, y+10), lab, font=_fuente_imagen(15), fill=(165, 188, 207))
+        d1.text((x+16, y+34), val, font=_fuente_imagen(22, True), fill=(245, 250, 255))
+    if anterior is not None:
+        p0 = _valor_fila(anterior, ["peso_kg", "peso"])
+        g0 = _valor_fila(anterior, ["porcentaje_grasa", "grasa"])
+        d1.text((78, 1150), f"Comparación anterior: peso {p0:.1f} kg · grasa {g0:.1f}%", font=_fuente_imagen(14), fill=(160, 205, 215))
+    else:
+        d1.text((78, 1150), "Esta es tu primera evaluación registrada.", font=_fuente_imagen(14), fill=(160, 205, 215))
+
+    # 2. Nutrición
+    img2, d2 = _crear_lienzo("PLAN NUTRICIONAL", f"{nombre_cliente} · {plan['objetivo']}", (95, 190, 150))
+    d2.text((75, 245), f"{plan['calorias']:,} kcal / día".replace(",", "."), font=_fuente_imagen(42, True), fill=(125, 225, 175))
+    d2.text((78, 305), "DISTRIBUCIÓN DIARIA DE MACRONUTRIENTES", font=_fuente_imagen(17, True), fill=(180, 200, 215))
+    macros = [("PROTEÍNA", plan["proteina"], (72, 205, 170)), ("CARBOHIDRATOS", plan["carbohidratos"], (105, 170, 255)), ("GRASAS", plan["grasa"], (195, 155, 255))]
+    for i, (lab, val, col) in enumerate(macros):
+        y = 350 + i*105
+        d2.rounded_rectangle((75, y, 825, y+76), radius=17, fill=(17, 35, 54), outline=col, width=2)
+        d2.text((98, y+13), lab, font=_fuente_imagen(17, True), fill=(180, 200, 215))
+        d2.text((660, y+12), f"{val} g", font=_fuente_imagen(29, True), fill=col)
+    d2.text((78, 690), "REPARTO APROXIMADO POR COMIDA", font=_fuente_imagen(19, True), fill=(150, 215, 225))
+    y = 735
+    for comida in plan["comidas"]:
+        d2.rounded_rectangle((75, y, 825, y+82), radius=15, fill=(17, 35, 54), outline=(54, 86, 110), width=1)
+        d2.text((96, y+10), comida["nombre"], font=_fuente_imagen(19, True), fill=(245, 250, 255))
+        detalle = f"{comida['kcal_total']} kcal · P {comida['proteina']} g · C {comida['carbohidratos']} g · G {comida['grasa']} g"
+        d2.text((96, y+43), detalle, font=_fuente_imagen(15), fill=(145, 210, 190))
+        y += 91
+    _texto_ajustado(d2, (78, 1105), "Alimentos sugeridos: proteína magra, cereales o tubérculos, frutas y verduras. Las cifras por comida son macros estimados, no gramos exactos de cada alimento.", _fuente_imagen(14), (185, 202, 215), 740, 3, 3)
+
+    # 3. Resumen integral
+    img3, d3 = _crear_lienzo("PLAN INTEGRAL", f"{nombre_cliente} · {fecha}", (145, 165, 255))
+    d3.text((78, 250), "TU OBJETIVO", font=_fuente_imagen(20, True), fill=(155, 190, 255))
+    _texto_ajustado(d3, (78, 292), plan["objetivo"], _fuente_imagen(36, True), (248, 250, 255), 735, 2, 6)
+    d3.rounded_rectangle((75, 405, 825, 600), radius=24, fill=(17, 35, 54), outline=(90, 120, 180), width=2)
+    d3.text((105, 435), "ENERGÍA DIARIA", font=_fuente_imagen(18, True), fill=(175, 195, 220))
+    d3.text((105, 475), f"{plan['calorias']:,} kcal".replace(",", "."), font=_fuente_imagen(48, True), fill=(145, 190, 255))
+    d3.text((105, 545), f"Proteína {plan['proteina']} g  ·  Carbohidratos {plan['carbohidratos']} g  ·  Grasas {plan['grasa']} g", font=_fuente_imagen(16), fill=(190, 205, 220))
+    d3.text((78, 650), "PUNTOS DE SEGUIMIENTO", font=_fuente_imagen(20, True), fill=(155, 190, 255))
+    puntos = [
+        f"Peso actual: {peso:.1f} kg" if peso else "Registrar peso corporal",
+        f"Grasa estimada: {grasa:.1f}%" if grasa else "Completar medidas corporales",
+        f"Cintura: {cintura:.1f} cm" if cintura else "Registrar cintura",
+        f"Estatura: {estatura:.0f} cm · Edad: {edad:.0f}" if estatura and edad else "Revisar datos del perfil",
+    ]
+    for i, punto in enumerate(puntos):
+        yy = 705 + i*76
+        d3.ellipse((85, yy+6, 112, yy+33), fill=(105, 205, 185))
+        d3.text((135, yy), punto, font=_fuente_imagen(21), fill=(235, 242, 250))
+    _texto_ajustado(d3, (78, 1045), plan["enfoque"], _fuente_imagen(17), (180, 205, 225), 740, 4, 5)
+    d3.text((78, 1155), "Guía orientativa: ajustar con el entrenador y un profesional de nutrición.", font=_fuente_imagen(13), fill=(155, 175, 195))
+
+    resultados = {}
+    for nombre, imagen in [("01_Evolucion_Fisica.png", img1), ("02_Plan_Nutricional.png", img2), ("03_Plan_Integral.png", img3)]:
+        buffer = io.BytesIO()
+        imagen.save(buffer, format="PNG", optimize=True)
+        resultados[nombre] = buffer.getvalue()
+    return resultados
+
+
+def mostrar_evolucion_inteligente(row, nombre_cliente="Cliente", anterior=None, clave="evolucion"):
+    """Muestra tres imágenes del mismo tamaño en una fila y permite descargarlas."""
+    if row is None or not hasattr(row, "get"):
+        st.info("Registra una evaluación para generar las imágenes de evolución.")
+        return
+    try:
+        imagenes = generar_imagenes_evolucion(row, anterior, nombre_cliente)
+        st.markdown("---")
+        titulo_ui("Evolución Inteligente", "fi-rr-gallery", 3, 25)
+        st.caption("Imágenes generadas automáticamente con los resultados de la evaluación seleccionada.")
+        columnas = st.columns(3, gap="small")
+        etiquetas = ["Evolución física", "Plan nutricional", "Plan integral"]
+        for i, ((archivo, datos), col, etiqueta) in enumerate(zip(imagenes.items(), columnas, etiquetas)):
+            with col:
+                st.image(datos, use_container_width=True)
+                st.download_button(
+                    f"⬇️ {etiqueta}", data=datos, file_name=archivo,
+                    mime="image/png", use_container_width=True,
+                    key=f"{clave}_png_{i}",
+                )
+        paquete = io.BytesIO()
+        with zipfile.ZipFile(paquete, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for archivo, datos in imagenes.items():
+                zf.writestr(archivo, datos)
+        st.download_button(
+            "📦 Descargar las 3 imágenes", data=paquete.getvalue(),
+            file_name="Evolucion_Inteligente_Imagenes.zip",
+            mime="application/zip", use_container_width=True,
+            key=f"{clave}_zip",
+        )
+    except Exception as e:
+        st.error(f"No fue posible generar las imágenes de evolución: {e}")
 
 
 # ============================================================
@@ -3010,6 +3200,15 @@ else:
                         r3.metric("Calorías Recomendadas", f"{cals} kcal")
                         r4.metric("Edad Metabólica", f"{edad_bio} años")
 
+                        # Generar las tres imágenes inmediatamente después de guardar.
+                        fila_imagenes = dict(datos_medidas)
+                        mostrar_evolucion_inteligente(
+                            fila_imagenes,
+                            st.session_state.get("nombre", "Cliente"),
+                            anterior=None,
+                            clave=f"registro_{id_reg}",
+                        )
+
                     except Exception as e:
                         st.error(f"❌ Error calculando o guardando las medidas: {e}")
 
@@ -3038,6 +3237,13 @@ else:
                 mostrar_alimentacion_recomendada(
                     mis_registros.iloc[-1],
                     st.session_state.get("nombre", "Cliente"),
+                )
+                evaluacion_anterior = mis_registros.iloc[-2] if len(mis_registros) > 1 else None
+                mostrar_evolucion_inteligente(
+                    mis_registros.iloc[-1],
+                    st.session_state.get("nombre", "Cliente"),
+                    anterior=evaluacion_anterior,
+                    clave=f"cliente_{user_id}",
                 )
 
                 st.markdown("---")
@@ -3390,6 +3596,13 @@ else:
                                     mostrar_alimentacion_recomendada(
                                         h_cliente.iloc[-1],
                                         u_info.get("nombre_completo", "Cliente"),
+                                    )
+                                    evaluacion_anterior_admin = h_cliente.iloc[-2] if len(h_cliente) > 1 else None
+                                    mostrar_evolucion_inteligente(
+                                        h_cliente.iloc[-1],
+                                        u_info.get("nombre_completo", "Cliente"),
+                                        anterior=evaluacion_anterior_admin,
+                                        clave=f"admin_{id_cliente}",
                                     )
                                     h_cliente = h_cliente.drop(columns=["_fecha_nutricion_dt"], errors="ignore")
 
