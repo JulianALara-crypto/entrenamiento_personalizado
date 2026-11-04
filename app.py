@@ -1052,8 +1052,41 @@ def calcular_recomendacion_alimentaria(row):
     }
 
 
+def obtener_imagen_objetivo(meta):
+    """Devuelve la ruta de la guía visual correspondiente al objetivo guardado."""
+    texto = str(meta or "").strip().lower()
+
+    # Recomposición debe evaluarse antes que las coincidencias generales.
+    if "recompos" in texto:
+        archivo = "03_recomposicion_corporal.png"
+    elif "ganar" in texto or "músc" in texto or "mus" in texto:
+        archivo = "02_ganar_musculo.png"
+    elif any(palabra in texto for palabra in ("perder", "déficit", "deficit", "peso", "grasa")):
+        archivo = "01_perder_peso_deficit_calorico.png"
+    elif "mant" in texto:
+        archivo = "04_mantenimiento.png"
+    else:
+        return None
+
+    carpeta_assets = os.path.join(BASE_DIR, "assets")
+    ruta = os.path.join(carpeta_assets, archivo)
+    return ruta if os.path.isfile(ruta) else None
+
+
+def mostrar_imagen_objetivo(meta):
+    """Muestra la imagen local del objetivo sin depender de servicios externos."""
+    ruta = obtener_imagen_objetivo(meta)
+    if ruta:
+        st.image(ruta, use_container_width=True)
+    else:
+        st.caption(
+            "La guía visual de este objetivo no está disponible. "
+            "Verifica que la carpeta assets esté junto a app.py."
+        )
+
+
 def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
-    """Muestra macros y ejemplos de comidas del cliente seleccionado."""
+    """Muestra macros, guía visual y ejemplos de comidas del cliente seleccionado."""
     if row is None or not hasattr(row, "index") or len(row.index) == 0:
         st.info("Todavía no hay una evaluación disponible para generar la guía alimentaria.")
         return
@@ -1076,6 +1109,9 @@ def mostrar_alimentacion_recomendada(row, nombre_cliente="Cliente"):
         <div style="font-size:14px;opacity:.9;">{plan['enfoque']}</div></div>""",
         unsafe_allow_html=True,
     )
+
+    # La imagen se selecciona automáticamente con el objetivo de esta evaluación.
+    mostrar_imagen_objetivo(plan["objetivo"])
 
     columnas = st.columns(4)
     tarjetas = [
