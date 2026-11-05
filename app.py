@@ -3,13 +3,14 @@ import os
 import json
 import io
 import zipfile
+import re
 import urllib.parse
 from datetime import datetime, date
 
 import pandas as pd
 import requests
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 
 
 # ============================================================
@@ -30,6 +31,110 @@ def api_get(*args, **kwargs):
 
 def api_post(*args, **kwargs):
     return API_SESSION.post(*args, **kwargs)
+
+
+def enviar_pago_api(cedula, valor, concepto, valor_compromiso, fecha_pago=None):
+    """Guarda un abono usando la estructura de Pagos que ya existe en Google Sheets."""
+    fecha_pago = fecha_pago or datetime.today().strftime("%d-%m-%Y")
+    id_pago = f"{normalizar_cedula(cedula)}_{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+    respuesta = api_post(
+        URL_API,
+        json={
+            "action": "guardar_pago",
+            "id_pago": str(id_pago),
+            "cedula": str(cedula).strip(),
+            "fecha_pago": str(fecha_pago),
+            "valor": float(valor),
+            "concepto": str(concepto).strip(),
+            "valor_mensualidad": float(valor_compromiso),
+        },
+        timeout=30,
+    )
+    respuesta.raise_for_status()
+    try:
+        resultado = respuesta.json()
+    except Exception:
+        resultado = {}
+    if resultado.get("status") == "error":
+        raise RuntimeError(str(resultado.get("message", "Google Apps Script reportó un error")))
+    return id_pago
+
+
+def _extraer_ref_contrato(texto):
+    m = re.search(r"REF\s*=\s*([A-Za-z0-9_-]+)", str(texto or ""), flags=re.I)
+    return m.group(1) if m else ""
+
+
+def _extraer_valor_contrato(texto):
+    m = re.search(r"VALOR\s*=\s*([0-9]+(?:[.,][0-9]+)?)", str(texto or ""), flags=re.I)
+    if not m:
+        return 0.0
+    try:
+        return float(m.group(1).replace(".", "").replace(",", ".")) if "." in m.group(1) and len(m.group(1).split(".")[-1]) == 3 else float(m.group(1).replace(",", "."))
+    except Exception:
+        return 0.0
+
+
+def construir_estado_cuenta(df_pagos, df_planes, cedula):
+    """Devuelve compromisos separados por plan y deudas mensuales históricas detectables.
+
+    Los contratos nuevos se identifican con REF/VALOR en observaciones del plan y REF
+    en el concepto del pago. Los registros antiguos se agrupan por mes porque no tenían
+    identificador de contrato. No inventa cobros en meses sin registro.
+    """
+    cedula_norm = normalizar_cedula(cedula)
+    pagos = df_pagos.copy() if df_pagos is not None and not df_pagos.empty else pd.DataFrame()
+    planes = df_planes.copy() if df_planes is not None and not df_planes.empty else pd.DataFrame()
+    if not pagos.empty and "cedula" in pagos.columns:
+        pagos = pagos[pagos["cedula"].apply(normalizar_cedula) == cedula_norm].copy()
+    if not planes.empty and "cedula" in planes.columns:
+        planes = planes[planes["cedula"].apply(normalizar_cedula) == cedula_norm].copy()
+    if not pagos.empty:
+        pagos["_valor_num"] = pd.to_numeric(pagos["valor"] if "valor" in pagos.columns else pd.Series(0, index=pagos.index), errors="coerce").fillna(0)
+        pagos["_compromiso_num"] = pd.to_numeric(pagos["valor_mensualidad"] if "valor_mensualidad" in pagos.columns else pd.Series(0, index=pagos.index), errors="coerce").fillna(0)
+        pagos["_concepto_txt"] = pagos.get("concepto", pd.Series(index=pagos.index, dtype=str)).fillna("").astype(str)
+        pagos["_fecha_dt"] = pagos.get("fecha_pago", pd.Series(index=pagos.index, dtype=str)).apply(parsear_fecha)
+    obligaciones = []
+    refs_nuevas = set()
+    if not planes.empty:
+        for _, plan_row in planes.iterrows():
+            obs = str(plan_row.get("observaciones", "") or "")
+            ref = _extraer_ref_contrato(obs)
+            valor = _extraer_valor_contrato(obs)
+            if not ref or valor <= 0:
+                continue
+            refs_nuevas.add(ref)
+            nombre_plan = str(plan_row.get("tipo_plan", "Plan contratado") or "Plan contratado")
+            fecha = str(plan_row.get("fecha_inicio", "") or "")
+            concepto_ref = f"REF={ref}"
+            abonos = 0.0
+            if not pagos.empty:
+                mask_ref = pagos["_concepto_txt"].str.contains(re.escape(concepto_ref), case=False, regex=True)
+                abonos = float(pagos.loc[mask_ref, "_valor_num"].sum())
+            saldo = max(valor - abonos, 0.0)
+            obligaciones.append({
+                "clave": f"plan:{ref}", "tipo": "Plan", "descripcion": f"{nombre_plan} · {fecha}",
+                "valor": valor, "pagado": abonos, "saldo": saldo, "ref": ref,
+            })
+    # Compatibilidad con pagos antiguos: calcular pendientes de los meses que sí tienen
+    # al menos un movimiento y cuyo valor de mensualidad quedó guardado en la hoja.
+    if not pagos.empty:
+        legacy = pagos[~pagos["_concepto_txt"].str.contains(r"REF\s*=", case=False, regex=True)].copy()
+        legacy = legacy[legacy["_fecha_dt"].notna() & (legacy["_compromiso_num"] > 0)]
+        if not legacy.empty:
+            legacy["_periodo"] = legacy["_fecha_dt"].dt.strftime("%Y-%m")
+            for periodo, grupo in legacy.groupby("_periodo", sort=True):
+                valor = float(grupo["_compromiso_num"].iloc[-1])
+                pagado = float(grupo["_valor_num"].sum())
+                saldo = max(valor - pagado, 0.0)
+                if saldo > 0.001:
+                    obligaciones.append({
+                        "clave": f"legacy:{periodo}", "tipo": "Saldo anterior",
+                        "descripcion": f"Registro histórico · {periodo}", "valor": valor,
+                        "pagado": pagado, "saldo": saldo, "ref": "",
+                    })
+    obligaciones.sort(key=lambda x: (x["tipo"] != "Saldo anterior", x["descripcion"]))
+    return obligaciones
 
 def invalidar_cache_datos():
     """Invalida únicamente los cachés de datos de la aplicación."""
@@ -1175,9 +1280,9 @@ def _crear_lienzo(titulo, subtitulo, acento):
     d = ImageDraw.Draw(imagen)
     d.rounded_rectangle((28, 28, ancho-28, alto-28), radius=34, outline=(48, 75, 100), width=3)
     d.rounded_rectangle((55, 55, ancho-55, 205), radius=26, fill=(14, 29, 47), outline=acento, width=2)
-    d.text((82, 82), "PERSONAL TRAINING", font=_fuente_imagen(25, True), fill=(139, 220, 229))
-    d.text((82, 120), titulo, font=_fuente_imagen(42, True), fill=(248, 250, 252))
-    d.text((84, 174), subtitulo[:55], font=_fuente_imagen(19), fill=(183, 199, 216))
+    d.text((82, 82), "PERSONAL TRAINING", font=_fuente_imagen(29, True), fill=(139, 220, 229))
+    d.text((82, 120), titulo, font=_fuente_imagen(48, True), fill=(248, 250, 252))
+    d.text((84, 174), subtitulo[:55], font=_fuente_imagen(23), fill=(183, 199, 216))
     return imagen, d
 
 
@@ -1210,6 +1315,98 @@ def _texto_ajustado(d, xy, texto, fuente, color, max_ancho, max_lineas=2, separa
     return y
 
 
+def _dibujar_figura_humana_3d(imagen, centro_x=450, arriba=245, acento=(70, 190, 205)):
+    """Silueta anatómica ilustrada con volumen, degradados, luz y sombra (sin datos externos)."""
+    escala = 3
+    w, h = imagen.size
+    mascara = Image.new("L", (w * escala, h * escala), 0)
+    md = ImageDraw.Draw(mascara)
+    def poligono(puntos, fill=255):
+        md.polygon([(int(x*escala), int((t + (y-t)*0.83)*escala)) for x, y in puntos], fill=fill)
+    def elipse(caja, fill=255):
+        x1, y1, x2, y2 = caja
+        md.ellipse((int(x1*escala), int((t+(y1-t)*0.83)*escala),
+                    int(x2*escala), int((t+(y2-t)*0.83)*escala)), fill=fill)
+    cx, t = centro_x, arriba
+    # Cabeza y cuello
+    elipse((cx-43, t, cx+43, t+91))
+    poligono([(cx-19,t+76),(cx+19,t+76),(cx+25,t+119),(cx-25,t+119)])
+    # Tronco: hombros, pecho, cintura y cadera con contorno anatómico suave
+    poligono([(cx-27,t+105),(cx-72,t+112),(cx-105,t+143),(cx-94,t+205),
+              (cx-76,t+265),(cx-70,t+330),(cx-91,t+374),(cx-72,t+405),
+              (cx-44,t+418),(cx+44,t+418),(cx+72,t+405),(cx+91,t+374),
+              (cx+70,t+330),(cx+76,t+265),(cx+94,t+205),(cx+105,t+143),
+              (cx+72,t+112),(cx+27,t+105)])
+    # Brazos superiores, antebrazos y manos
+    poligono([(cx-82,t+125),(cx-111,t+137),(cx-151,t+218),(cx-184,t+296),
+              (cx-170,t+315),(cx-151,t+306),(cx-119,t+244),(cx-83,t+184)])
+    poligono([(cx+82,t+125),(cx+111,t+137),(cx+151,t+218),(cx+184,t+296),
+              (cx+170,t+315),(cx+151,t+306),(cx+119,t+244),(cx+83,t+184)])
+    elipse((cx-187,t+286,cx-153,t+340)); elipse((cx+153,t+286,cx+187,t+340))
+    # Piernas: muslos, rodillas y pantorrillas con separación natural
+    poligono([(cx-76,t+390),(cx-18,t+399),(cx-26,t+510),(cx-39,t+565),
+              (cx-48,t+610),(cx-91,t+610),(cx-88,t+560),(cx-91,t+505)])
+    poligono([(cx+76,t+390),(cx+18,t+399),(cx+26,t+510),(cx+39,t+565),
+              (cx+48,t+610),(cx+91,t+610),(cx+88,t+560),(cx+91,t+505)])
+    # Pies
+    elipse((cx-100,t+590,cx-35,t+632)); elipse((cx+35,t+590,cx+100,t+632))
+    mascara = mascara.resize((w, h), Image.Resampling.LANCZOS)
+    # Sombra proyectada para separar el cuerpo del fondo
+    sombra = Image.new("RGBA", (w, h), (0,0,0,0))
+    sombra_alpha = mascara.filter(ImageFilter.GaussianBlur(17))
+    sombra_layer = Image.new("RGBA", (w, h), (0,0,0,0))
+    sombra_layer.putalpha(sombra_alpha.point(lambda a: int(a*0.42)))
+    sombra.alpha_composite(sombra_layer, (9, 13))
+    imagen_rgba = imagen.convert("RGBA")
+    imagen_rgba.alpha_composite(sombra)
+    # Degradado horizontal/vertical: lado izquierdo iluminado, lateral derecho en sombra.
+    grad = Image.new("RGBA", (w, h), (0,0,0,0))
+    gd = ImageDraw.Draw(grad)
+    base = (48, 125, 158)
+    for x in range(cx-205, cx+206):
+        rel = (x-(cx-205))/410
+        luz = max(0.0, 1.0-abs(rel-0.28)*1.65)
+        shade = max(0.0, (rel-0.60)/0.40)
+        r = int(base[0] + 42*luz - 23*shade)
+        g = int(base[1] + 65*luz - 42*shade)
+        b = int(base[2] + 62*luz - 34*shade)
+        gd.line((x, t-5, x, min(h-1,t+650)), fill=(max(0,r),max(0,g),max(0,b),255))
+    grad.putalpha(mascara)
+    imagen_rgba.alpha_composite(grad)
+    # Detalles anatómicos discretos: clavículas, pectorales, abdomen y grupos musculares.
+    detalle = Image.new("RGBA", (w, h), (0,0,0,0))
+    dd = ImageDraw.Draw(detalle)
+    yy = lambda v: int(t + (v-t)*0.83)
+    tono_luz = (190, 235, 240, 75)
+    tono_sombra = (8, 48, 76, 85)
+    dd.arc((cx-78,yy(t+128),cx+78,yy(t+198)), 195, 345, fill=tono_luz, width=4)
+    dd.arc((cx-78,yy(t+150),cx+78,yy(t+235)), 18, 162, fill=tono_sombra, width=4)
+    dd.line((cx-27,yy(t+225),cx,yy(t+235),cx+27,yy(t+225)), fill=tono_luz, width=3)
+    for dy in (255, 286, 317):
+        dd.arc((cx-38,yy(t+dy-16),cx+38,yy(t+dy+17)), 8, 172, fill=tono_sombra, width=3)
+    dd.arc((cx-65,yy(t+365),cx-8,yy(t+430)), 205, 340, fill=tono_luz, width=3)
+    dd.arc((cx+8,yy(t+365),cx+65,yy(t+430)), 200, 335, fill=tono_luz, width=3)
+    dd.arc((cx-87,yy(t+475),cx-28,yy(t+550)), 205, 330, fill=tono_sombra, width=3)
+    dd.arc((cx+28,yy(t+475),cx+87,yy(t+550)), 210, 335, fill=tono_sombra, width=3)
+    detalle.putalpha(ImageChops.multiply(detalle.getchannel("A"), mascara))
+    imagen_rgba.alpha_composite(detalle)
+    # Brillo suave en hombro, pecho y muslos para dar volumen 3D.
+    brillo = Image.new("RGBA", (w,h), (0,0,0,0))
+    bd = ImageDraw.Draw(brillo)
+    bd.ellipse((cx-88,t+125,cx-8,t+290), fill=(160,225,235,55))
+    bd.ellipse((cx-68,t+405,cx-30,t+565), fill=(155,220,235,42))
+    bd.ellipse((cx+27,t+405,cx+65,t+565), fill=(155,220,235,28))
+    brillo = brillo.filter(ImageFilter.GaussianBlur(24))
+    brillo.putalpha(ImageChops.multiply(brillo.getchannel("A"), mascara))
+    imagen_rgba.alpha_composite(brillo)
+    # Contorno fino de luz en el borde exterior.
+    borde = mascara.filter(ImageFilter.FIND_EDGES).filter(ImageFilter.GaussianBlur(1.2))
+    borde_layer = Image.new("RGBA", (w,h), (acento[0],acento[1],acento[2],0))
+    borde_layer.putalpha(borde.point(lambda a: min(150, int(a*0.75))))
+    imagen_rgba.alpha_composite(borde_layer)
+    return imagen_rgba.convert("RGB")
+
+
 def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
     """Retorna tres PNG basados en la evaluación actual y, si existe, la anterior."""
     plan = calcular_recomendacion_alimentaria(row)
@@ -1229,15 +1426,10 @@ def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
 
     # 1. Evolución física
     img1, d1 = _crear_lienzo("EVOLUCIÓN FÍSICA", f"{nombre_cliente} · {fecha}", acento)
-    # Silueta humana vectorial ilustrativa, no representa una predicción anatómica.
-    cx, top = 450, 270
-    d1.ellipse((cx-48, top, cx+48, top+96), fill=(80, 130, 160), outline=(125, 205, 215), width=3)
-    d1.rounded_rectangle((cx-82, top+105, cx+82, top+365), radius=58, fill=(45, 92, 122), outline=(100, 190, 205), width=3)
-    d1.line((cx-65, top+145, cx-150, top+310), fill=(80, 160, 185), width=34)
-    d1.line((cx+65, top+145, cx+150, top+310), fill=(80, 160, 185), width=34)
-    d1.line((cx-38, top+350, cx-65, top+535), fill=(80, 160, 185), width=42)
-    d1.line((cx+38, top+350, cx+65, top+535), fill=(80, 160, 185), width=42)
-    d1.text((95, 820), "INDICADORES ACTUALES", font=_fuente_imagen(21, True), fill=(150, 215, 225))
+    # Figura humana anatómica ilustrada con volumen 3D, luz lateral y sombra suave.
+    img1 = _dibujar_figura_humana_3d(img1, centro_x=450, arriba=245, acento=acento)
+    d1 = ImageDraw.Draw(img1)
+    d1.text((78, 815), "INDICADORES ACTUALES", font=_fuente_imagen(27, True), fill=(150, 215, 225))
     vals = [
         ("Peso", f"{peso:.1f} kg" if peso else "Sin dato"),
         ("IMC", f"{imc:.2f}" if imc else "Sin dato"),
@@ -1250,33 +1442,33 @@ def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
         col, fila = i % 2, i // 2
         x = 75 + col*385
         y = 865 + fila*91
-        d1.rounded_rectangle((x, y, x+350, y+72), radius=15, fill=(17, 35, 54), outline=(53, 91, 116), width=2)
-        d1.text((x+16, y+10), lab, font=_fuente_imagen(15), fill=(165, 188, 207))
-        d1.text((x+16, y+34), val, font=_fuente_imagen(22, True), fill=(245, 250, 255))
+        d1.rounded_rectangle((x, y, x+350, y+76), radius=15, fill=(17, 35, 54), outline=(53, 91, 116), width=2)
+        d1.text((x+16, y+8), lab, font=_fuente_imagen(19, True), fill=(165, 188, 207))
+        d1.text((x+16, y+37), val, font=_fuente_imagen(27, True), fill=(245, 250, 255))
     if anterior is not None:
         p0 = _valor_fila(anterior, ["peso_kg", "peso"])
         g0 = _valor_fila(anterior, ["porcentaje_grasa", "grasa"])
-        d1.text((78, 1150), f"Comparación anterior: peso {p0:.1f} kg · grasa {g0:.1f}%", font=_fuente_imagen(14), fill=(160, 205, 215))
+        d1.text((78, 1150), f"Comparación anterior: peso {p0:.1f} kg · grasa {g0:.1f}%", font=_fuente_imagen(17), fill=(160, 205, 215))
     else:
-        d1.text((78, 1150), "Esta es tu primera evaluación registrada.", font=_fuente_imagen(14), fill=(160, 205, 215))
+        d1.text((78, 1150), "Esta es tu primera evaluación registrada.", font=_fuente_imagen(17), fill=(160, 205, 215))
 
     # 2. Nutrición
     img2, d2 = _crear_lienzo("PLAN NUTRICIONAL", f"{nombre_cliente} · {plan['objetivo']}", (95, 190, 150))
     d2.text((75, 245), f"{plan['calorias']:,} kcal / día".replace(",", "."), font=_fuente_imagen(42, True), fill=(125, 225, 175))
-    d2.text((78, 305), "DISTRIBUCIÓN DIARIA DE MACRONUTRIENTES", font=_fuente_imagen(17, True), fill=(180, 200, 215))
+    d2.text((78, 305), "DISTRIBUCIÓN DIARIA DE MACRONUTRIENTES", font=_fuente_imagen(21, True), fill=(180, 200, 215))
     macros = [("PROTEÍNA", plan["proteina"], (72, 205, 170)), ("CARBOHIDRATOS", plan["carbohidratos"], (105, 170, 255)), ("GRASAS", plan["grasa"], (195, 155, 255))]
     for i, (lab, val, col) in enumerate(macros):
         y = 350 + i*105
         d2.rounded_rectangle((75, y, 825, y+76), radius=17, fill=(17, 35, 54), outline=col, width=2)
-        d2.text((98, y+13), lab, font=_fuente_imagen(17, True), fill=(180, 200, 215))
-        d2.text((660, y+12), f"{val} g", font=_fuente_imagen(29, True), fill=col)
+        d2.text((98, y+13), lab, font=_fuente_imagen(21, True), fill=(180, 200, 215))
+        d2.text((660, y+12), f"{val} g", font=_fuente_imagen(35, True), fill=col)
     d2.text((78, 690), "REPARTO APROXIMADO POR COMIDA", font=_fuente_imagen(19, True), fill=(150, 215, 225))
     y = 735
     for comida in plan["comidas"]:
         d2.rounded_rectangle((75, y, 825, y+82), radius=15, fill=(17, 35, 54), outline=(54, 86, 110), width=1)
         d2.text((96, y+10), comida["nombre"], font=_fuente_imagen(19, True), fill=(245, 250, 255))
         detalle = f"{comida['kcal_total']} kcal · P {comida['proteina']} g · C {comida['carbohidratos']} g · G {comida['grasa']} g"
-        d2.text((96, y+43), detalle, font=_fuente_imagen(15), fill=(145, 210, 190))
+        d2.text((96, y+43), detalle, font=_fuente_imagen(18), fill=(145, 210, 190))
         y += 91
     _texto_ajustado(d2, (78, 1105), "Alimentos sugeridos: proteína magra, cereales o tubérculos, frutas y verduras. Las cifras por comida son macros estimados, no gramos exactos de cada alimento.", _fuente_imagen(14), (185, 202, 215), 740, 3, 3)
 
@@ -1287,7 +1479,11 @@ def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
     d3.rounded_rectangle((75, 405, 825, 600), radius=24, fill=(17, 35, 54), outline=(90, 120, 180), width=2)
     d3.text((105, 435), "ENERGÍA DIARIA", font=_fuente_imagen(18, True), fill=(175, 195, 220))
     d3.text((105, 475), f"{plan['calorias']:,} kcal".replace(",", "."), font=_fuente_imagen(48, True), fill=(145, 190, 255))
-    d3.text((105, 545), f"Proteína {plan['proteina']} g  ·  Carbohidratos {plan['carbohidratos']} g  ·  Grasas {plan['grasa']} g", font=_fuente_imagen(16), fill=(190, 205, 220))
+    _texto_ajustado(
+        d3, (105, 540),
+        f"Proteína {plan['proteina']} g · Carbohidratos {plan['carbohidratos']} g · Grasas {plan['grasa']} g",
+        _fuente_imagen(16), (190, 205, 220), 680, 2, 2,
+    )
     d3.text((78, 650), "PUNTOS DE SEGUIMIENTO", font=_fuente_imagen(20, True), fill=(155, 190, 255))
     puntos = [
         f"Peso actual: {peso:.1f} kg" if peso else "Registrar peso corporal",
@@ -1298,9 +1494,9 @@ def generar_imagenes_evolucion(row, anterior=None, nombre_cliente="Cliente"):
     for i, punto in enumerate(puntos):
         yy = 705 + i*76
         d3.ellipse((85, yy+6, 112, yy+33), fill=(105, 205, 185))
-        d3.text((135, yy), punto, font=_fuente_imagen(21), fill=(235, 242, 250))
+        d3.text((135, yy), punto, font=_fuente_imagen(24), fill=(235, 242, 250))
     _texto_ajustado(d3, (78, 1045), plan["enfoque"], _fuente_imagen(17), (180, 205, 225), 740, 4, 5)
-    d3.text((78, 1155), "Guía orientativa: ajustar con el entrenador y un profesional de nutrición.", font=_fuente_imagen(13), fill=(155, 175, 195))
+    d3.text((78, 1155), "Guía orientativa: ajustar con el entrenador y un profesional de nutrición.", font=_fuente_imagen(16), fill=(155, 175, 195))
 
     resultados = {}
     for nombre, imagen in [("01_Evolucion_Fisica.png", img1), ("02_Plan_Nutricional.png", img2), ("03_Plan_Integral.png", img3)]:
@@ -2551,13 +2747,14 @@ def obtener_resumen_clases(df_clases, cedula):
         # --------------------------------------------------------
         id_plan_actual = resultado["id_plan"]
 
-        if id_plan_actual and "id_plan" in registros.columns:
-            registros["_id_plan_norm"] = (
-                registros["id_plan"].fillna("").astype(str).str.strip()
-            )
-            registros = registros[
-                registros["_id_plan_norm"] == id_plan_actual
-            ].copy()
+        ids_clase = (
+            registros["id_plan"].fillna("").astype(str).str.strip()
+            if "id_plan" in registros.columns else pd.Series(dtype=str)
+        )
+        hay_ids_plan_en_clases = bool((ids_clase != "").any())
+        if id_plan_actual and hay_ids_plan_en_clases:
+            registros["_id_plan_norm"] = ids_clase
+            registros = registros[registros["_id_plan_norm"] == id_plan_actual].copy()
             registros = registros.drop(columns=["_id_plan_norm"], errors="ignore")
 
         elif not pd.isna(resultado["fecha_inicio"]) and "fecha_clase" in registros.columns:
@@ -3380,166 +3577,81 @@ else:
                             st.markdown("---")
                             mostrar_resumen_clases(df_clases, id_cliente, "Resumen de Clases")
 
-                            # PAGOS Y MENSUALIDAD
+                            # PAGOS Y MEMBRESÍAS: compromisos por contratación/renovación, no por cambio de mes
                             st.markdown("---")
-                            titulo_ui("Pagos y Mensualidad", "fi-rr-credit-card", 4, 21)
+                            titulo_ui("Pagos y Membresías", "fi-rr-credit-card", 4, 21)
 
                             pagos_cliente = pd.DataFrame()
                             if not df_pagos.empty and "cedula" in df_pagos.columns:
-                                pagos_cliente = df_pagos[df_pagos["cedula"] == id_cliente].copy()
+                                pagos_cliente = df_pagos[df_pagos["cedula"].apply(normalizar_cedula) == normalizar_cedula(id_cliente)].copy()
 
-                            hoy = pd.Timestamp.today().normalize()
-
-                            if not pagos_cliente.empty:
-                                pagos_cliente["_fecha_dt"] = (
-                                    pagos_cliente["fecha_pago"].apply(parsear_fecha)
-                                    if "fecha_pago" in pagos_cliente.columns
-                                    else pd.NaT
-                                )
-                                pagos_mes_actual = pagos_cliente[
-                                    pagos_cliente["_fecha_dt"].notna()
-                                    & (pagos_cliente["_fecha_dt"].dt.year == hoy.year)
-                                    & (pagos_cliente["_fecha_dt"].dt.month == hoy.month)
-                                ].copy()
-                            else:
-                                pagos_mes_actual = pd.DataFrame()
-
-                            valor_mensualidad_actual = 0.0
-                            if not pagos_cliente.empty and "valor_mensualidad" in pagos_cliente.columns:
-                                mensualidades_validas = pd.to_numeric(
-                                    pagos_cliente["valor_mensualidad"], errors="coerce"
-                                ).dropna()
-                                if not mensualidades_validas.empty:
-                                    valor_mensualidad_actual = float(mensualidades_validas.iloc[-1])
-
-                            if valor_mensualidad_actual <= 0:
-                                valor_mensualidad_actual = 400000.0
-
-                            total_pagado = 0.0
-                            if not pagos_mes_actual.empty and "valor" in pagos_mes_actual.columns:
-                                total_pagado = float(
-                                    pd.to_numeric(pagos_mes_actual["valor"], errors="coerce")
-                                    .fillna(0)
-                                    .sum()
-                                )
-
-                            saldo_actual = max(valor_mensualidad_actual - total_pagado, 0.0)
-
-                            if saldo_actual <= 0.001:
-                                estado_pago = "🟢 PAGADO"
-                            elif total_pagado > 0:
-                                estado_pago = "🟡 ABONO"
-                            else:
-                                estado_pago = "🔴 PENDIENTE"
-
-                            nombre_mes = hoy.strftime("%B").capitalize()
+                            obligaciones_cliente = construir_estado_cuenta(df_pagos, df_planes_bd, id_cliente)
+                            total_comprometido = sum(float(x["valor"]) for x in obligaciones_cliente)
+                            total_abonado = sum(float(x["pagado"]) for x in obligaciones_cliente)
+                            total_pendiente = sum(float(x["saldo"]) for x in obligaciones_cliente)
+                            estado_cuenta = "🟢 AL DÍA" if total_pendiente <= 0.001 else ("🟡 CON ABONOS" if total_abonado > 0 else "🔴 PENDIENTE")
 
                             p1, p2, p3, p4 = st.columns(4)
-                            p1.metric("Mensualidad", f"${valor_mensualidad_actual:,.0f}")
-                            p2.metric("Pagado este mes", f"${total_pagado:,.0f}")
-                            p3.metric("Saldo Pendiente", f"${saldo_actual:,.0f}")
-                            p4.metric("Estado", estado_pago)
-                            st.caption(f"📅 Estado de pagos correspondiente a {nombre_mes} de {hoy.year}.")
+                            p1.metric("Compromisos identificados", f"${total_comprometido:,.0f}")
+                            p2.metric("Abonos registrados", f"${total_abonado:,.0f}")
+                            p3.metric("Saldo pendiente", f"${total_pendiente:,.0f}")
+                            p4.metric("Estado", estado_cuenta)
+                            st.caption("Los paquetes de clases no se reinician por mes: el compromiso permanece abierto hasta completar el pago. Las renovaciones crean un compromiso independiente. Los registros antiguos sin referencia se concilian por mes cuando existe un movimiento guardado.")
 
-                            # REGISTRAR PAGO
-                            with st.expander("➕ Registrar nuevo pago / abono", expanded=saldo_actual > 0):
-                                with st.form(f"form_pago_{id_cliente}"):
-                                    valor_mensualidad = st.number_input(
-                                        "Valor de la mensualidad ($):",
-                                        min_value=1.0,
-                                        value=float(valor_mensualidad_actual),
-                                        step=5000.0,
-                                        format="%.0f",
-                                    )
+                            if obligaciones_cliente:
+                                filas_estado = []
+                                for ob in obligaciones_cliente:
+                                    filas_estado.append({
+                                        "Concepto": ob["descripcion"],
+                                        "Valor acordado": f"${ob['valor']:,.0f}",
+                                        "Abonado": f"${ob['pagado']:,.0f}",
+                                        "Pendiente": f"${ob['saldo']:,.0f}",
+                                        "Estado": "PAGADO" if ob["saldo"] <= 0.001 else ("ABONO" if ob["pagado"] > 0 else "PENDIENTE"),
+                                    })
+                                st.dataframe(pd.DataFrame(filas_estado), use_container_width=True, hide_index=True)
+                            else:
+                                st.info("No hay compromisos pendientes detectables. Los planes nuevos se registrarán con su valor negociado y los abonos asociados.")
 
-                                    saldo_para_nuevo_pago = max(float(valor_mensualidad) - total_pagado, 0.0)
-
-                                    if total_pagado > 0:
-                                        st.caption(
-                                            f"Pagado este mes: ${total_pagado:,.0f} | Saldo según esta mensualidad: ${saldo_para_nuevo_pago:,.0f}"
+                            # REGISTRAR ABONO: se conserva el flujo manual, ahora aplicado a un compromiso concreto.
+                            if obligaciones_cliente and any(x["saldo"] > 0.001 for x in obligaciones_cliente):
+                                pendientes_pago = [x for x in obligaciones_cliente if x["saldo"] > 0.001]
+                                etiquetas_ob = [f"{x['descripcion']} · Pendiente ${x['saldo']:,.0f}" for x in pendientes_pago]
+                                with st.expander("➕ Registrar nuevo pago / abono", expanded=True):
+                                    with st.form(f"form_pago_{id_cliente}"):
+                                        idx_ob = st.selectbox("¿A qué compromiso corresponde el pago?", range(len(pendientes_pago)), format_func=lambda i: etiquetas_ob[i])
+                                        obligacion_sel = pendientes_pago[idx_ob]
+                                        valor_mensualidad = st.number_input(
+                                            "Valor negociado del plan / compromiso ($):",
+                                            min_value=1.0, value=float(obligacion_sel["valor"]), step=5000.0, format="%.0f",
                                         )
-
-                                    valor_pago_default = saldo_para_nuevo_pago if saldo_para_nuevo_pago > 0 else 1.0
-                                    valor_pago = st.number_input(
-                                        "Valor del pago / abono ($):",
-                                        min_value=1.0,
-                                        value=float(valor_pago_default),
-                                        step=5000.0,
-                                        format="%.0f",
-                                    )
-
-                                    concepto_pago = st.text_input(
-                                        "Concepto:",
-                                        value="Abono mensualidad"
-                                    ).strip()
-
-                                    guardar_pago = st.form_submit_button("Registrar Pago", use_container_width=True)
-
-                                    if guardar_pago:
-                                        try:
-                                            valor_mensualidad = float(valor_mensualidad)
-                                            valor_pago = float(valor_pago)
-
-                                            if valor_mensualidad <= 0:
-                                                st.error("❌ La mensualidad debe ser mayor que cero.")
-                                                st.stop()
-                                            if valor_pago <= 0:
-                                                st.error("❌ El valor del pago debe ser mayor que cero.")
-                                                st.stop()
-                                            if not concepto_pago:
-                                                concepto_pago = "Abono mensualidad"
-
-                                            nuevo_total = total_pagado + valor_pago
-                                            if nuevo_total > valor_mensualidad + 0.001:
-                                                st.error(
-                                                    f"❌ El abono supera el saldo pendiente. Saldo disponible: ${saldo_para_nuevo_pago:,.0f}."
-                                                )
-                                                st.stop()
-
-                                            id_pago = f"{id_cliente}_{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
-                                            fecha_pago = datetime.today().strftime("%d-%m-%Y")
-
-                                            fila_pago = [
-                                                str(id_pago),
-                                                str(id_cliente),
-                                                str(fecha_pago),
-                                                float(valor_pago),
-                                                str(concepto_pago),
-                                                float(valor_mensualidad),
-                                            ]
-
-                                            respuesta_pago = api_post(
-                                                URL_API,
-                                                json={
-                                                    "action": "guardar_pago",
-                                                    "id_pago": str(id_pago),
-                                                    "cedula": str(id_cliente).strip(),
-                                                    "fecha_pago": str(fecha_pago),
-                                                    "valor": float(valor_pago),
-                                                    "concepto": str(concepto_pago).strip(),
-                                                    "valor_mensualidad": float(valor_mensualidad),
-                                                },
-                                                timeout=30,
-                                            )
-                                            respuesta_pago.raise_for_status()
-
+                                        saldo_para_nuevo_pago = max(float(valor_mensualidad) - float(obligacion_sel["pagado"]), 0.0)
+                                        st.caption(f"Abonado a este compromiso: ${obligacion_sel['pagado']:,.0f} | Saldo disponible: ${saldo_para_nuevo_pago:,.0f}")
+                                        valor_pago = st.number_input(
+                                            "Valor del pago / abono ($):", min_value=1.0,
+                                            value=float(saldo_para_nuevo_pago if saldo_para_nuevo_pago > 0 else 1.0),
+                                            step=5000.0, format="%.0f",
+                                        )
+                                        concepto_base = st.text_input("Concepto:", value=f"Abono {obligacion_sel['descripcion']}").strip()
+                                        guardar_pago = st.form_submit_button("Registrar Pago", use_container_width=True)
+                                        if guardar_pago:
                                             try:
-                                                resultado_pago = respuesta_pago.json()
-                                            except Exception:
-                                                resultado_pago = {}
-
-                                            if resultado_pago.get("status") == "error":
-                                                st.error(
-                                                    "❌ Google Apps Script reportó un error: "
-                                                    + str(resultado_pago.get("message", "Error desconocido"))
-                                                )
-                                                st.stop()
-
-                                            invalidar_cache_datos()
-                                            st.success("✅ Pago registrado correctamente.")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Error registrando el pago: {e}")
+                                                if valor_mensualidad <= 0 or valor_pago <= 0:
+                                                    st.error("El valor del compromiso y el abono deben ser mayores que cero.")
+                                                    st.stop()
+                                                if valor_pago > saldo_para_nuevo_pago + 0.001:
+                                                    st.error(f"El abono supera el saldo pendiente. Disponible: ${saldo_para_nuevo_pago:,.0f}.")
+                                                    st.stop()
+                                                concepto_pago = concepto_base or "Abono de compromiso"
+                                                if obligacion_sel.get("ref"):
+                                                    concepto_pago += f" | REF={obligacion_sel['ref']}"
+                                                enviar_pago_api(id_cliente, valor_pago, concepto_pago, valor_mensualidad)
+                                                invalidar_cache_datos()
+                                                st.success("✅ Pago registrado correctamente.")
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"❌ Error registrando el pago: {e}")
+                            elif not obligaciones_cliente:
+                                st.caption("Al registrar una nueva membresía o renovación podrás indicar el valor negociado y el abono inicial. No se crearán cobros automáticos por el cambio de mes.")
 
                             # HISTORIAL DE PAGOS
                             if not pagos_cliente.empty:
@@ -3666,12 +3778,16 @@ else:
                     mostrar_resumen_clases(df_clases, id_cliente_clases)
 
                     resumen_actual = obtener_resumen_clases(df_clases, id_cliente_clases)
+                    plan_agotado = (
+                        resumen_actual["clases_contratadas"] > 0
+                        and resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]
+                    )
 
                     # ------------------------------------------------
                     # CONFIGURACIÓN DEL PLAN
                     # ------------------------------------------------
                     st.markdown("---")
-                    titulo_ui("Registrar un nuevo plan", "fi-rr-file-plus", 4, 21)
+                    titulo_ui("Renovar plan agotado" if plan_agotado else "Registrar un nuevo plan", "fi-rr-file-plus", 4, 21)
 
                     with st.form(f"form_config_clases_{id_cliente_clases}"):
                         col_plan1, col_plan2 = st.columns(2)
@@ -3689,25 +3805,31 @@ else:
 
                         with col_plan2:
                             clases_contratadas = st.number_input(
-                                "Número de clases contratadas:",
-                                min_value=1,
-                                max_value=500,
-                                value=(
-                                    resumen_actual["clases_contratadas"]
-                                    if resumen_actual["clases_contratadas"] > 0
-                                    else 20
-                                ),
-                                step=1,
+                                "Número de clases contratadas:", min_value=1, max_value=500,
+                                value=(resumen_actual["clases_contratadas"] if resumen_actual["clases_contratadas"] > 0 else 20), step=1,
+                            )
+
+                        col_valor_plan, col_abono_plan = st.columns(2)
+                        with col_valor_plan:
+                            valor_plan_negociado = st.number_input(
+                                "Valor negociado de esta contratación ($):", min_value=1.0,
+                                value=520000.0, step=5000.0, format="%.0f",
+                                help="Puedes ingresar el precio acordado con este cliente, aunque sea diferente al tarifario.",
+                            )
+                        with col_abono_plan:
+                            abono_inicial_plan = st.number_input(
+                                "Abono recibido ahora ($):", min_value=0.0, value=0.0,
+                                step=5000.0, format="%.0f",
+                                help="Registra cero si todavía no ha abonado. El saldo quedará pendiente.",
                             )
 
                         st.caption(
-                            "Cada vez que guardes un plan se crea una nueva contratación "
-                            "con un ID único. El plan anterior queda en el historial y "
-                            "las clases del nuevo plan comienzan desde cero."
+                            "Cada contratación o renovación crea un nuevo ciclo de clases. El paquete no vence por cambio de mes: "
+                            "las clases no utilizadas continúan disponibles hasta consumirse. El valor negociado y el abono quedan asociados a este plan."
                         )
 
                         guardar_config_plan = st.form_submit_button(
-                            "Registrar nuevo plan",
+                            "Registrar renovación" if plan_agotado else "Registrar nuevo plan",
                             use_container_width=True,
                         )
 
@@ -3717,7 +3839,19 @@ else:
                                     st.error("❌ Debes indicar el tipo o nombre del plan.")
                                     st.stop()
 
+                                valor_plan_negociado = float(valor_plan_negociado)
+                                abono_inicial_plan = float(abono_inicial_plan)
+                                if valor_plan_negociado <= 0:
+                                    st.error("❌ Ingresa el valor negociado de la contratación.")
+                                    st.stop()
+                                if abono_inicial_plan < 0 or abono_inicial_plan > valor_plan_negociado:
+                                    st.error("❌ El abono inicial no puede ser superior al valor negociado.")
+                                    st.stop()
+
                                 fecha_hoy_str = datetime.today().strftime("%d-%m-%Y")
+                                ref_contrato = f"CT{normalizar_cedula(id_cliente_clases)}{datetime.today().strftime('%Y%m%d%H%M%S%f')}"
+                                id_plan_nuevo = f"PLAN_{ref_contrato}"
+                                observaciones_plan = f"Nueva contratación | REF={ref_contrato} | VALOR={valor_plan_negociado:.0f}"
 
                                 # Estructura ACTUAL de la hoja Planes:
                                 # cedula, nombre_completo, tipo_plan, fecha_inicio,
@@ -3729,7 +3863,7 @@ else:
                                     fecha_hoy_str,
                                     "",
                                     "Activo",
-                                    "Nueva contratación",
+                                    observaciones_plan,
                                     int(clases_contratadas),
                                 ]
 
@@ -3743,8 +3877,9 @@ else:
                                         "fecha_inicio": str(fecha_hoy_str),
                                         "fecha_fin": "",
                                         "estado": "Activo",
-                                        "observaciones": "Nueva contratación",
+                                        "observaciones": observaciones_plan,
                                         "clases_incluidas": int(clases_contratadas),
+                                        "id_plan": id_plan_nuevo,
                                     },
                                     timeout=30,
                                 )
@@ -3763,9 +3898,24 @@ else:
                                     )
                                     st.stop()
 
+                                if abono_inicial_plan > 0:
+                                    try:
+                                        enviar_pago_api(
+                                            id_cliente_clases,
+                                            abono_inicial_plan,
+                                            f"Abono inicial · {plan_cliente} · REF={ref_contrato}",
+                                            valor_plan_negociado,
+                                        )
+                                    except Exception as e_pago:
+                                        st.warning(
+                                            "El plan quedó registrado, pero no se pudo guardar el abono inicial. "
+                                            f"Regístralo desde Pagos y Membresías. Detalle: {e_pago}"
+                                        )
                                 invalidar_cache_datos()
+                                saldo_nuevo_plan = max(valor_plan_negociado - abono_inicial_plan, 0.0)
                                 st.success(
-                                    "✅ Nuevo plan registrado correctamente."
+                                    f"✅ Nueva contratación registrada. Valor: ${valor_plan_negociado:,.0f} · "
+                                    f"Abono: ${abono_inicial_plan:,.0f} · Saldo: ${saldo_nuevo_plan:,.0f}."
                                 )
                                 st.rerun()
 
@@ -3778,11 +3928,13 @@ else:
                     st.markdown("---")
                     titulo_ui("Registrar clase tomada", "fi-rr-calendar-plus", 4, 21)
 
-                    if (
-                        resumen_actual["clases_contratadas"] > 0
-                        and resumen_actual["clases_tomadas"] >= resumen_actual["clases_contratadas"]
-                    ):
-                        st.warning("⚠️ Este cliente ya utilizó todas las clases contratadas.")
+                    if plan_agotado:
+                        st.warning(
+                            "⚠️ ¡Paquete agotado! El cliente consumió todas las clases contratadas. "
+                            "Es momento de negociar y registrar la renovación. El aviso no depende del mes calendario."
+                        )
+                    elif resumen_actual["clases_contratadas"] > 0 and resumen_actual["clases_restantes"] <= 2:
+                        st.info(f"🔔 Próxima renovación: quedan {resumen_actual['clases_restantes']} clases de este paquete.")
 
                     with st.form(f"form_registro_clase_{id_cliente_clases}"):
                         fecha_clase = st.date_input(
@@ -3842,6 +3994,7 @@ else:
                                     str(resumen_actual["plan"]),
                                     int(resumen_actual["clases_tomadas"]) + 1,
                                     "Tomada",
+                                    str(id_plan_actual),
                                 ]
 
                                 respuesta_clase = api_post(
@@ -3855,6 +4008,7 @@ else:
                                         "tipo_plan": str(resumen_actual["plan"]).strip(),
                                         "periodo": int(resumen_actual["clases_tomadas"]) + 1,
                                         "estado": "Tomada",
+                                        "id_plan": str(id_plan_actual),
                                     },
                                     timeout=30,
                                 )
