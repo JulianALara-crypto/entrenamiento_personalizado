@@ -2965,7 +2965,7 @@ if "autenticado" not in st.session_state:
 ARCHIVO_TARIFARIO = os.path.join(BASE_DIR, "tarifario_personal_training.json")
 
 TARIFAS_INICIALES = [
-    {"Modalidad": "Individual", "Plan": "1 clase", "Sesiones": 1, "Precio COP": 33000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Sesión individual"},
+    {"Modalidad": "Individual", "Plan": "1 clase", "Sesiones": 1, "Precio COP": 35000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Sesión individual"},
     {"Modalidad": "Individual", "Plan": "Paquete 4 clases", "Sesiones": 4, "Precio COP": 130000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 4 sesiones"},
     {"Modalidad": "Individual", "Plan": "Paquete 8 clases", "Sesiones": 8, "Precio COP": 260000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 8 sesiones"},
     {"Modalidad": "Individual", "Plan": "Paquete 12 clases", "Sesiones": 12, "Precio COP": 400000, "Frecuencia semanal": "Variable", "Estado": "Activo", "Observaciones": "Paquete de 12 sesiones"},
@@ -3077,7 +3077,7 @@ def mostrar_modulo_tarifario():
         csv = editado.to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ Descargar tarifario CSV", data=csv, file_name="tarifario_entrenamiento.csv", mime="text/csv", use_container_width=True)
 
-    st.caption("Nota técnica: esta versión guarda los cambios en un archivo JSON junto a la aplicación. En Streamlit Cloud, el archivo local puede reiniciarse al volver a desplegar o reiniciar el servicio; para persistencia garantizada conviene conectar el tarifario a Google Sheets mediante una acción específica del Apps Script.")
+    st.caption("Nota técnica: esta versión guarda los cambios en un archivo JSON junto a la aplicación.")
 
 
 # ============================================================
