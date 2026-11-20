@@ -33,6 +33,31 @@ def api_post(*args, **kwargs):
     return API_SESSION.post(*args, **kwargs)
 
 
+def api_admin_post(datos):
+    """Acciones administrativas protegidas por un token compartido con Apps Script."""
+    try:
+        token = str(st.secrets.get("ADMIN_API_TOKEN", "")).strip()
+    except Exception:
+        token = ""
+    if not token:
+        raise RuntimeError(
+            "Falta configurar ADMIN_API_TOKEN en los Secrets de Streamlit y "
+            "la propiedad ADMIN_API_TOKEN en Google Apps Script."
+        )
+    payload = dict(datos)
+    payload["admin_token"] = token
+    respuesta = api_post(URL_API, json=payload, timeout=30)
+    respuesta.raise_for_status()
+    try:
+        resultado = respuesta.json()
+    except Exception:
+        raise RuntimeError("Google Apps Script devolvió una respuesta no válida.")
+    if str(resultado.get("status", "")).lower() != "success":
+        raise RuntimeError(str(resultado.get("message", "No se pudo completar la acción administrativa.")))
+    invalidar_cache_datos()
+    return resultado
+
+
 def enviar_pago_api(cedula, valor, concepto, valor_compromiso, fecha_pago=None):
     """Guarda un abono usando la estructura de Pagos que ya existe en Google Sheets."""
     fecha_pago = fecha_pago or datetime.today().strftime("%d-%m-%Y")
@@ -1854,6 +1879,7 @@ def cargar_usuarios_login():
                 "rol",
                 "password",
                 "fecha_registro",
+                "estado",
             ],
         )
 
@@ -1904,6 +1930,7 @@ def cargar_bd():
                 "rol",
                 "password",
                 "fecha_registro",
+                "estado",
             ],
         )
 
@@ -3127,7 +3154,10 @@ if not st.session_state["autenticado"]:
                 elif normalizar_cedula(cedula_ingreso) in df_usuarios["cedula"].values:
                     u = df_usuarios[df_usuarios["cedula"] == normalizar_cedula(cedula_ingreso)].iloc[0]
 
-                    if str(u["password"]).strip() == pass_ingreso:
+                    estado_usuario = str(u.get("estado", "ACTIVO") or "ACTIVO").strip().upper()
+                    if estado_usuario in ("INACTIVO", "ELIMINADO", "INACTIVE", "DELETED"):
+                        st.error("Esta cuenta está desactivada. Comunícate con el administrador.")
+                    elif str(u["password"]).strip() == pass_ingreso:
                         st.session_state["autenticado"] = True
                         st.session_state["rol"] = u.get("rol", "Cliente")
                         st.session_state["cedula"] = str(u["cedula"])
@@ -3520,8 +3550,14 @@ else:
         st.subheader("Panel de Control General")
 
         if not df_usuarios.empty:
-            clientes = df_usuarios[df_usuarios["rol"].astype(str).str.lower() == "cliente"]
-            st.markdown(f"Total de Clientes Registrados: {len(clientes)}")
+            clientes = df_usuarios[df_usuarios["rol"].astype(str).str.lower() == "cliente"].copy()
+            estados_clientes = (
+                clientes["estado"].fillna("").astype(str).str.upper()
+                if "estado" in clientes.columns
+                else pd.Series("ACTIVO", index=clientes.index)
+            )
+            total_activos = int((~estados_clientes.isin(["INACTIVO", "ELIMINADO", "INACTIVE", "DELETED"])).sum())
+            st.markdown(f"Clientes activos: {total_activos} · Total de cuentas: {len(clientes)}")
 
             if not clientes.empty:
                 st.sidebar.markdown(
@@ -3532,14 +3568,142 @@ else:
                     "",
                     [
                         "Dashboard General",
+                        "Administración de Clientes",
                         "Gestión de Clientes",
                         "Control de Clases",
                         "Tarifario y Planes",
                     ],
                 )
 
+                # ADMINISTRACIÓN DE CLIENTES: edición, restablecimiento y baja lógica.
+                if opcion_admin == "Administración de Clientes":
+                    titulo_ui("Administración de Clientes", "fi-rr-users", 2, 28)
+                    st.caption(
+                        "Edita los datos de acceso y contacto, restablece contraseñas y "
+                        "gestiona el estado de las cuentas. La baja conserva pagos, planes, "
+                        "clases e historial de medidas."
+                    )
+                    todos_clientes = df_usuarios[
+                        df_usuarios.get("rol", pd.Series("Cliente", index=df_usuarios.index))
+                        .astype(str).str.lower().eq("cliente")
+                    ].copy()
+                    if "estado" not in todos_clientes.columns:
+                        todos_clientes["estado"] = "ACTIVO"
+                    todos_clientes["estado"] = todos_clientes["estado"].fillna("").replace("", "ACTIVO")
+                    if todos_clientes.empty:
+                        st.info("No hay clientes registrados.")
+                    else:
+                        selector_admin = st.selectbox(
+                            "Buscar cliente (cédula o nombre):",
+                            options=todos_clientes["cedula"].astype(str) + " - " + todos_clientes["nombre_completo"].astype(str),
+                            key="admin_cliente_edicion_selector",
+                        )
+                        cedula_admin = selector_admin.split(" - ", 1)[0].strip()
+                        fila_admin = todos_clientes[todos_clientes["cedula"].astype(str) == cedula_admin].iloc[0]
+                        estado_actual = str(fila_admin.get("estado", "ACTIVO") or "ACTIVO").upper()
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Cédula", cedula_admin)
+                        c2.metric("Estado", estado_actual)
+                        c3.metric("Rol", str(fila_admin.get("rol", "Cliente")))
+                        token_configurado = False
+                        try:
+                            token_configurado = bool(str(st.secrets.get("ADMIN_API_TOKEN", "")).strip())
+                        except Exception:
+                            token_configurado = False
+                        if not token_configurado:
+                            st.error(
+                                "Para habilitar cambios seguros, configura ADMIN_API_TOKEN en "
+                                "Streamlit Secrets y la misma propiedad en Apps Script. "
+                                "Las consultas siguen disponibles, pero las modificaciones quedan bloqueadas."
+                            )
+                        with st.form(f"form_editar_cliente_admin_{cedula_admin}"):
+                            st.markdown("**Datos del cliente**")
+                            nombre_edit = st.text_input("Nombre completo", value=str(fila_admin.get("nombre_completo", "") or ""))
+                            whatsapp_edit = st.text_input("WhatsApp", value=str(fila_admin.get("whatsapp", "") or ""))
+                            eps_edit = st.text_input("EPS", value=str(fila_admin.get("eps", "") or ""))
+                            condiciones_edit = st.text_area(
+                                "Condiciones médicas / lesiones / cirugías",
+                                value=str(fila_admin.get("condiciones_medicas", "") or ""),
+                            )
+                            guardar_edicion = st.form_submit_button(
+                                "Guardar datos del cliente", use_container_width=True, disabled=not token_configurado
+                            )
+                        if guardar_edicion:
+                            if not nombre_edit.strip():
+                                st.error("El nombre del cliente es obligatorio.")
+                            else:
+                                try:
+                                    api_admin_post({
+                                        "action": "admin_actualizar_usuario",
+                                        "cedula": cedula_admin,
+                                        "nombre_completo": nombre_edit.strip(),
+                                        "whatsapp": whatsapp_edit.strip(),
+                                        "eps": eps_edit.strip(),
+                                        "condiciones_medicas": condiciones_edit.strip(),
+                                    })
+                                    st.success("Datos del cliente actualizados.")
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"No fue posible actualizar el cliente: {exc}")
+                        st.markdown("---")
+                        st.markdown("**Restablecer contraseña**")
+                        with st.form(f"form_password_admin_{cedula_admin}"):
+                            nueva_password = st.text_input("Nueva contraseña", type="password")
+                            confirmar_password = st.text_input("Confirmar nueva contraseña", type="password")
+                            restablecer = st.form_submit_button(
+                                "Restablecer contraseña", use_container_width=True, disabled=not token_configurado
+                            )
+                        if restablecer:
+                            if len(nueva_password) < 8:
+                                st.error("La contraseña debe tener al menos 8 caracteres.")
+                            elif nueva_password != confirmar_password:
+                                st.error("Las contraseñas no coinciden.")
+                            else:
+                                try:
+                                    api_admin_post({
+                                        "action": "admin_restablecer_password",
+                                        "cedula": cedula_admin,
+                                        "password": nueva_password,
+                                    })
+                                    st.success("Contraseña restablecida. El cliente ya puede ingresar con la nueva clave.")
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"No fue posible restablecer la contraseña: {exc}")
+                        st.markdown("---")
+                        st.markdown("**Estado de la cuenta**")
+                        estado_opciones = ["ACTIVO", "INACTIVO", "ELIMINADO"]
+                        nuevo_estado = st.selectbox(
+                            "Estado", estado_opciones,
+                            index=estado_opciones.index(estado_actual) if estado_actual in estado_opciones else 0,
+                            key=f"estado_cliente_admin_{cedula_admin}",
+                        )
+                        st.caption(
+                            "INACTIVO bloquea el acceso temporalmente. ELIMINADO oculta la cuenta de la gestión habitual "
+                            "y bloquea el acceso, pero conserva todos sus registros históricos."
+                        )
+                        if st.button(
+                            "Guardar estado de cuenta", use_container_width=True,
+                            disabled=(not token_configurado or nuevo_estado == estado_actual),
+                            key=f"guardar_estado_admin_{cedula_admin}",
+                        ):
+                            try:
+                                api_admin_post({
+                                    "action": "admin_cambiar_estado_usuario",
+                                    "cedula": cedula_admin,
+                                    "estado": nuevo_estado,
+                                })
+                                st.success(f"Estado actualizado a {nuevo_estado}.")
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"No fue posible cambiar el estado: {exc}")
+                        if estado_actual != "ELIMINADO":
+                            st.warning(
+                                "La opción ELIMINADO es una baja lógica: no borra físicamente la fila ni los pagos, "
+                                "planes, clases o medidas asociados."
+                            )
+
                 # TARIFARIO PRIVADO DEL ADMINISTRADOR
-                if opcion_admin == "Tarifario y Planes":
+                elif opcion_admin == "Tarifario y Planes":
                     mostrar_modulo_tarifario()
 
                 # DASHBOARD GENERAL
