@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # CONFIGURACIÓN GENERAL
 # ============================================================
 
-URL_API = ("https://script.google.com/macros/s/AKfycbw4-puezuL2HJs_Y5AZEmQ418Mw_D1F-dHgbCWDXw0CKeKNJoMtSiW6JopmHvM942Km/exec")
+URL_API = ("https://script.google.com/macros/s/AKfycbySzMwfs65u1KMoz8p5QocizUTn3M2xDt54zDSzPdAX07izfzqZWLUQNfMPVbpqqU7N/exec")
 
 
 # ============================================================
