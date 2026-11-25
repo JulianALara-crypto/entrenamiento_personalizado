@@ -1009,6 +1009,133 @@ st.markdown(
     section[data-testid="stSidebar"] .stRadio label:hover {
         background: linear-gradient(90deg, rgba(54,185,232,.10), rgba(127,143,82,.07)) !important;
     }
+
+    /* NAVEGACIÓN DE MÓDULOS: tarjetas Liquid Glass con profundidad */
+    section[data-testid="stSidebar"] [role="radiogroup"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        padding: 8px 3px 12px !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        min-height: 58px !important;
+        padding: 12px 14px !important;
+        margin: 0 !important;
+        border: 1px solid rgba(190, 225, 230, .13) !important;
+        border-radius: 17px !important;
+        background:
+            linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.018) 58%, rgba(7,20,25,.30)) !important;
+        box-shadow:
+            0 8px 18px rgba(0,0,0,.24),
+            inset 0 1px 0 rgba(255,255,255,.10),
+            inset 0 -1px 0 rgba(0,0,0,.22) !important;
+        backdrop-filter: blur(16px) saturate(135%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+        overflow: hidden !important;
+        transform: translateZ(0);
+        transition:
+            transform .24s cubic-bezier(.2,.8,.2,1),
+            border-color .24s ease,
+            background .24s ease,
+            box-shadow .24s ease !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 14%;
+        bottom: 14%;
+        width: 3px;
+        border-radius: 0 8px 8px 0;
+        background: linear-gradient(180deg, rgba(84,205,235,.15), rgba(145,164,102,.15));
+        opacity: .55;
+        transition: all .24s ease;
+        pointer-events: none;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label::after {
+        content: "";
+        position: absolute;
+        top: -70%;
+        left: -75%;
+        width: 48%;
+        height: 240%;
+        transform: rotate(24deg);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+        transition: left .65s ease;
+        pointer-events: none;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:hover {
+        transform: translateX(4px) translateY(-2px) !important;
+        border-color: rgba(104,211,225,.34) !important;
+        background:
+            linear-gradient(135deg, rgba(54,185,232,.15), rgba(127,143,82,.10) 65%, rgba(255,255,255,.035)) !important;
+        box-shadow:
+            0 14px 26px rgba(0,0,0,.34),
+            0 0 20px rgba(54,185,232,.08),
+            inset 0 1px 0 rgba(255,255,255,.16) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:hover::after {
+        left: 135%;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+        border-color: rgba(94,211,226,.48) !important;
+        background:
+            radial-gradient(circle at 92% 12%, rgba(76,199,221,.17), transparent 38%),
+            linear-gradient(135deg, rgba(39,151,190,.22), rgba(104,132,75,.15) 72%, rgba(255,255,255,.045)) !important;
+        box-shadow:
+            0 13px 27px rgba(0,0,0,.36),
+            0 0 25px rgba(54,185,232,.11),
+            inset 0 1px 0 rgba(255,255,255,.18),
+            inset 0 -1px 0 rgba(0,0,0,.24) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked)::before {
+        top: 10%;
+        bottom: 10%;
+        width: 4px;
+        background: linear-gradient(180deg, #54d5f0, #9aaa68);
+        box-shadow: 0 0 12px rgba(84,213,240,.55);
+        opacity: 1;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:active {
+        transform: translateY(1px) scale(.985) !important;
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label p {
+        color: rgba(242,249,250,.90) !important;
+        font-weight: 650 !important;
+        letter-spacing: .12px !important;
+        text-shadow: 0 1px 8px rgba(0,0,0,.24);
+    }
+
+    section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) p {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+    }
+
+    @media (max-width: 768px) {
+        section[data-testid="stSidebar"] [role="radiogroup"] > label {
+            min-height: 54px !important;
+            border-radius: 15px !important;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        section[data-testid="stSidebar"] [role="radiogroup"] > label,
+        section[data-testid="stSidebar"] [role="radiogroup"] > label::after {
+            transition: none !important;
+        }
+    }
 </style>
     """,
     unsafe_allow_html=True,
@@ -1676,9 +1803,9 @@ def calcular_metricas(
         or "déficit" in meta_normalizada
         or "deficit" in meta_normalizada
     ):
-        # Déficit moderado de referencia. Se conserva la lógica histórica
-        # para los registros antiguos guardados como "Perder Grasa".
-        calorias = mantenimiento - 400
+        # Déficit hipocalórico solicitado para el objetivo de perder grasa/peso.
+        # Solo cambia este objetivo; ganar músculo y mantenimiento conservan su lógica.
+        calorias = mantenimiento - 500
     elif "ganar" in meta_normalizada or "músc" in meta_normalizada or "mus" in meta_normalizada:
         calorias = mantenimiento + 350
     else:
@@ -3301,8 +3428,8 @@ else:
                         "Mantenimiento",
                     ],
                     help=(
-                        "El déficit calórico usa una reducción moderada de referencia de 400 kcal/día; "
-                        "la recomposición toma como referencia las calorías de mantenimiento."
+                        "Perder grasa/peso aplica un déficit hipocalórico de referencia de 500 kcal/día; "
+                        "ganar músculo conserva su superávit y la recomposición toma como referencia el mantenimiento."
                     ),
                 )
 
