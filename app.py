@@ -4245,131 +4245,109 @@ st.markdown(
 )
 
 # ============================================================
-# SIDEBAR NAVIGATION — BOTONES NEON 3D PREMIUM
-# Estilo aislado de la navegación: no altera la lógica de módulos.
+# SIDEBAR NAVIGATION — BOTONES 3D COLORIDOS (SELECTORES ROBUSTOS)
 # ============================================================
 st.markdown(
     """
     <style>
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] {
+    /* Streamlit puede envolver las opciones en distintos contenedores.
+       Por eso se seleccionan las etiquetas descendientes del radiogroup,
+       no solamente sus hijos directos. */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] {
         display: flex !important;
         flex-direction: column !important;
-        gap: 13px !important;
-        padding: 12px 7px 18px !important;
+        gap: 12px !important;
+        padding: 10px 8px 18px !important;
     }
 
-    /* Botón físico: color visible incluso sin pasar el cursor */
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label {
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]) {
         position: relative !important;
         display: flex !important;
         align-items: center !important;
-        box-sizing: border-box !important;
+        width: 100% !important;
         min-height: 58px !important;
+        box-sizing: border-box !important;
         margin: 0 !important;
-        padding: 13px 16px 14px 19px !important;
-        border-radius: 17px !important;
-        border: 1px solid rgba(255,255,255,.38) !important;
-        border-bottom: 4px solid rgba(0,0,0,.42) !important;
-        background: linear-gradient(135deg, #167da0 0%, #155078 52%, #183b63 100%) !important;
-        box-shadow: 0 7px 0 rgba(0,0,0,.28), 0 11px 20px rgba(0,0,0,.38),
-                    inset 0 1px 0 rgba(255,255,255,.38),
-                    inset 0 -10px 18px rgba(0,0,0,.16) !important;
+        padding: 13px 16px 13px 18px !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(255,255,255,.42) !important;
+        border-bottom: 5px solid rgba(0,0,0,.42) !important;
+        background: linear-gradient(145deg, #087f9b 0%, #12618f 55%, #173d70 100%) !important;
+        box-shadow: 0 6px 0 rgba(0,0,0,.32), 0 10px 18px rgba(0,0,0,.34),
+                    inset 0 1px 0 rgba(255,255,255,.38) !important;
+        cursor: pointer !important;
+        overflow: hidden !important;
         transform: translateY(0) !important;
         transition: transform .18s ease, box-shadow .18s ease, filter .18s ease !important;
-        overflow: hidden !important;
-        cursor: pointer !important;
     }
 
-    /* Colores variados para que cada módulo tenga identidad propia */
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+1) {
-        background: linear-gradient(135deg, #087f9b, #125b91 58%, #193f75) !important;
+    /* Alternancia de colores entre módulos */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+1) {
+        background: linear-gradient(145deg, #078ba5, #075b91 60%, #173e75) !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+2) {
-        background: linear-gradient(135deg, #7250bd, #523b9d 58%, #342d70) !important;
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+2) {
+        background: linear-gradient(145deg, #8656cf, #6341a9 60%, #392c78) !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+3) {
-        background: linear-gradient(135deg, #16866e, #12664f 58%, #10463f) !important;
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+3) {
+        background: linear-gradient(145deg, #159879, #117052 60%, #10483e) !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+4) {
-        background: linear-gradient(135deg, #bd6a27, #98501f 58%, #693d2b) !important;
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+4) {
+        background: linear-gradient(145deg, #e28a32, #b85d24 60%, #713b2b) !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+5) {
-        background: linear-gradient(135deg, #bd4776, #96365f 58%, #642d59) !important;
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+5) {
+        background: linear-gradient(145deg, #d65386, #a83e70 60%, #672d5b) !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:nth-child(6n+6) {
-        background: linear-gradient(135deg, #4778b9, #345a9b 58%, #293e75) !important;
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):nth-of-type(6n+6) {
+        background: linear-gradient(145deg, #568be0, #3c63b0 60%, #293f7c) !important;
     }
 
-    /* Reflejo superior y franja luminosa */
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label::before {
+    /* Brillo superior */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"])::before {
         content: "" !important;
         position: absolute !important;
-        left: 10px !important;
-        right: 10px !important;
-        top: 1px !important;
-        height: 42% !important;
-        border-radius: 14px 14px 45% 45% !important;
-        background: linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,0)) !important;
-        pointer-events: none !important;
-    }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label::after {
-        content: "" !important;
-        position: absolute !important;
-        left: 0 !important;
-        top: 13px !important;
-        bottom: 13px !important;
-        width: 4px !important;
-        border-radius: 0 5px 5px 0 !important;
-        background: rgba(255,255,255,.72) !important;
-        box-shadow: 0 0 10px rgba(255,255,255,.55) !important;
+        inset: 1px 8px auto 8px !important;
+        height: 45% !important;
+        border-radius: 14px 14px 50% 50% !important;
+        background: linear-gradient(180deg, rgba(255,255,255,.28), transparent) !important;
         pointer-events: none !important;
     }
 
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:hover {
-        transform: translateY(-4px) scale(1.018) !important;
-        filter: brightness(1.18) saturate(1.18) !important;
-        box-shadow: 0 10px 0 rgba(0,0,0,.25), 0 16px 28px rgba(0,0,0,.48),
-                    0 0 20px rgba(74,220,255,.22),
-                    inset 0 1px 0 rgba(255,255,255,.48) !important;
-    }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:active {
-        transform: translateY(3px) scale(.99) !important;
-        border-bottom-width: 1px !important;
-        box-shadow: 0 2px 0 rgba(0,0,0,.30), inset 0 3px 9px rgba(0,0,0,.24) !important;
-    }
-
-    /* Estado seleccionado: más brillante y con halo propio */
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label:has(input[type="radio"]:checked) {
-        border: 2px solid #b9f7ff !important;
-        border-bottom: 4px solid #08758e !important;
-        background: linear-gradient(135deg, #22d3ee 0%, #078bb8 48%, #2457a6 100%) !important;
-        box-shadow: 0 8px 0 rgba(0,0,0,.30), 0 13px 27px rgba(0,0,0,.45),
-                    0 0 0 2px rgba(34,211,238,.20), 0 0 30px rgba(34,211,238,.48),
-                    inset 0 2px 0 rgba(255,255,255,.55),
-                    inset 0 -10px 18px rgba(0,45,80,.20) !important;
-        transform: translateX(4px) translateY(-2px) !important;
-        filter: saturate(1.25) brightness(1.12) !important;
-    }
-
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label p,
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label span {
-        color: #ffffff !important;
+    /* Texto legible por encima del brillo */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]) p,
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]) span {
+        color: #fff !important;
         font-weight: 750 !important;
-        letter-spacing: .25px !important;
-        text-shadow: 0 2px 5px rgba(0,0,0,.52) !important;
-    }
-    section[data-testid="stSidebar"] div[data-testid="stRadio"] input[type="radio"] {
-        accent-color: #ffffff !important;
+        text-shadow: 0 2px 5px rgba(0,0,0,.55) !important;
     }
 
-    @media (max-width: 700px) {
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label {
-            min-height: 52px !important;
-            padding: 11px 13px 12px 16px !important;
-        }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]):hover {
+        transform: translateY(-4px) scale(1.02) !important;
+        filter: brightness(1.18) saturate(1.2) !important;
+        box-shadow: 0 9px 0 rgba(0,0,0,.30), 0 15px 25px rgba(0,0,0,.46),
+                    0 0 18px rgba(70,220,255,.30), inset 0 1px 0 rgba(255,255,255,.5) !important;
     }
+
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]:checked) {
+        background: linear-gradient(135deg, #35e0ee 0%, #078fc1 48%, #315fca 100%) !important;
+        border: 2px solid #d1fbff !important;
+        border-bottom: 5px solid #075c83 !important;
+        box-shadow: 0 7px 0 rgba(0,0,0,.34), 0 13px 26px rgba(0,0,0,.45),
+                    0 0 0 2px rgba(45,220,255,.22), 0 0 28px rgba(45,220,255,.58),
+                    inset 0 2px 0 rgba(255,255,255,.6) !important;
+        transform: translateX(4px) translateY(-2px) !important;
+        filter: brightness(1.12) saturate(1.25) !important;
+    }
+
+    /* El radio nativo se oculta visualmente: la opción completa es el botón */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input[type="radio"]) input[type="radio"] {
+        position: absolute !important;
+        opacity: 0 !important;
+        width: 1px !important;
+        height: 1px !important;
+    }
+
     @media (prefers-reduced-motion: reduce) {
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] > label {
+        section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label {
             transition: none !important;
         }
     }
@@ -4377,4 +4355,3 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
